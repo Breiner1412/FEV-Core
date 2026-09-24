@@ -1,0 +1,1447 @@
+openapi: 3.0.3
+
+info:
+  title: FEV-Core API
+  description: |
+    API de emisión de documentos electrónicos para Colombia.
+
+    Recibe los datos de una operación comercial y produce un documento electrónico
+    generado, firmado y transmitido para validación, con su estado consultable en
+    todo momento.
+
+    ## Modelo de emisión
+
+    La emisión es asíncrona. La API recibe el documento, le asigna consecutivo y
+    responde de inmediato sin contactar al servicio de validación. El procesamiento
+    ocurre en segundo plano y el resultado se consulta con `GET /documentos/{id}`.
+
+    Razón: la validación ante la autoridad tributaria tarda varios segundos y puede
+    fallar. Ver `docs/adr/0005-emision-asincrona.md`.
+
+    ## Reintentos seguros
+
+    Toda solicitud de emisión incluye `referenciaExterna`, un identificador que el
+    integrador asigna a la operación. Si una solicitud se repite con la misma
+    referencia, la API devuelve el documento ya creado en lugar de crear otro.
+
+    Esto permite reintentar sin riesgo cuando se pierde la respuesta:
+
+    - Documento creado en esta solicitud: `202 Accepted`
+    - Documento ya existía: `200 OK`
+
+    ## Autenticación
+
+    Todas las operaciones requieren una llave de API en la cabecera `X-Api-Key`.
+
+    ## Limitación conocida
+
+    Esta versión opera contra un simulador del servicio de validación, no contra el
+    servicio real de la DIAN. Ver `docs/adr/0007-abstraccion-proveedor-validacion.md`.
+  version: 1.0.0
+  contact:
+    name: Breiner Stiven Guisao Rodríguez
+    url: https://github.com/Breiner1412/FEV-Core
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Entorno local
+
+tags:
+  - name: Emisión
+    description: Creación de documentos electrónicos.
+  - name: Consulta
+    description: Estado, historial y descarga de documentos.
+  - name: Adquirentes
+    description: Catálogo de adquirentes.
+  - name: Productos
+    description: Catálogo de productos y servicios.
+  - name: Emisor
+    description: Configuración de la empresa emisora.
+  - name: Numeración
+    description: Rangos de numeración autorizados.
+
+security:
+  - LlaveApi: []
+
+paths:
+
+  # ─────────────────────────────  EMISIÓN  ─────────────────────────────
+
+  /facturas:
+    post:
+      tags: [Emisión]
+      summary: Emitir una factura electrónica de venta
+      description: |
+        Crea una factura, le asigna consecutivo del rango vigente y la deja en cola
+        de procesamiento. No espera la respuesta del servicio de validación.
+
+        Implementa RF-11, RF-14 y RF-15.
+      operationId: emitirFactura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirFacturaRequest'
+            examples:
+              ventaSimple:
+                summary: Venta de dos productos
+                value:
+                  referenciaExterna: "VTA-2026-000145"
+                  adquirenteId: "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+                  fechaEmision: "2026-09-24T14:30:00-05:00"
+                  formaPago: "CONTADO"
+                  medioPago: "TRANSFERENCIA"
+                  lineas:
+                    - productoId: "b1e2d3c4-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
+                      cantidad: 2
+                      precioUnitario: 150000.00
+                    - productoId: "c2f3e4d5-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+                      cantidad: 1
+                      precioUnitario: 89900.00
+                      descuento: 9900.00
+      responses:
+        '202':
+          $ref: '#/components/responses/DocumentoCreado'
+        '200':
+          $ref: '#/components/responses/DocumentoYaExistia'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+  /notas-credito:
+    post:
+      tags: [Emisión]
+      summary: Emitir una nota crédito
+      description: |
+        Crea una nota crédito asociada a una factura aprobada.
+
+        La factura referenciada debe existir y estar en estado `APROBADO` (RN-03).
+        La suma de las notas crédito asociadas no puede superar el total de la
+        factura (RN-04). No se puede referenciar otra nota (RN-05).
+
+        Implementa RF-12.
+      operationId: emitirNotaCredito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirNotaRequest'
+            examples:
+              devolucionParcial:
+                summary: Devolución de una unidad
+                value:
+                  referenciaExterna: "NC-2026-000012"
+                  documentoReferenciadoId: "d4a5b6c7-8e9f-4a0b-1c2d-3e4f5a6b7c8d"
+                  motivo: "DEVOLUCION_PARCIAL"
+                  observaciones: "El cliente devolvió una unidad por defecto de fábrica."
+                  fechaEmision: "2026-09-25T09:00:00-05:00"
+                  lineas:
+                    - productoId: "b1e2d3c4-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
+                      cantidad: 1
+                      precioUnitario: 150000.00
+      responses:
+        '202':
+          $ref: '#/components/responses/DocumentoCreado'
+        '200':
+          $ref: '#/components/responses/DocumentoYaExistia'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+  /notas-debito:
+    post:
+      tags: [Emisión]
+      summary: Emitir una nota débito
+      description: |
+        Crea una nota débito asociada a una factura aprobada. Mismas restricciones
+        de referencia que la nota crédito, sin el límite de valor.
+
+        Implementa RF-13.
+      operationId: emitirNotaDebito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirNotaRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/DocumentoCreado'
+        '200':
+          $ref: '#/components/responses/DocumentoYaExistia'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+  # ─────────────────────────────  CONSULTA  ─────────────────────────────
+
+  /documentos:
+    get:
+      tags: [Consulta]
+      summary: Listar documentos
+      description: Implementa RF-24.
+      operationId: listarDocumentos
+      parameters:
+        - name: tipo
+          in: query
+          schema:
+            $ref: '#/components/schemas/TipoDocumento'
+        - name: estado
+          in: query
+          schema:
+            $ref: '#/components/schemas/EstadoDocumento'
+        - name: desde
+          in: query
+          description: Fecha de emisión mínima, inclusive.
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          description: Fecha de emisión máxima, inclusive.
+          schema:
+            type: string
+            format: date
+        - name: pagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: tamanoPagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Página de resultados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaDocumentos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+
+  /documentos/{id}:
+    get:
+      tags: [Consulta]
+      summary: Consultar un documento
+      description: |
+        Devuelve el documento con su estado actual. Si fue aprobado incluye el
+        código único; si fue rechazado incluye los errores de validación.
+
+        Implementa RF-22.
+      operationId: consultarDocumento
+      parameters:
+        - $ref: '#/components/parameters/DocumentoId'
+      responses:
+        '200':
+          description: El documento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Documento'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /documentos/{id}/historial:
+    get:
+      tags: [Consulta]
+      summary: Consultar el historial de estados
+      description: |
+        Devuelve todas las transiciones de estado del documento en orden
+        cronológico, con la marca de tiempo y el motivo de cada una.
+
+        Implementa RF-23.
+      operationId: consultarHistorial
+      parameters:
+        - $ref: '#/components/parameters/DocumentoId'
+      responses:
+        '200':
+          description: Historial completo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransicionEstado'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /documentos/{id}/xml:
+    get:
+      tags: [Consulta]
+      summary: Descargar el XML firmado
+      description: |
+        Devuelve el archivo XML tal como fue transmitido, byte a byte.
+
+        Responde `409` si el documento aún no ha sido firmado.
+
+        Implementa RF-25.
+      operationId: descargarXml
+      parameters:
+        - $ref: '#/components/parameters/DocumentoId'
+      responses:
+        '200':
+          description: El XML firmado.
+          content:
+            application/xml:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+  # ─────────────────────────────  ADQUIRENTES  ─────────────────────────────
+
+  /adquirentes:
+    get:
+      tags: [Adquirentes]
+      summary: Listar adquirentes
+      operationId: listarAdquirentes
+      parameters:
+        - name: activo
+          in: query
+          schema:
+            type: boolean
+        - name: identificacion
+          in: query
+          schema:
+            type: string
+        - name: pagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: tamanoPagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Página de adquirentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaAdquirentes'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+    post:
+      tags: [Adquirentes]
+      summary: Registrar un adquirente
+      description: Implementa RF-06.
+      operationId: crearAdquirente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdquirenteRequest'
+      responses:
+        '201':
+          description: Adquirente creado.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Adquirente'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+  /adquirentes/{id}:
+    get:
+      tags: [Adquirentes]
+      summary: Consultar un adquirente
+      operationId: consultarAdquirente
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      responses:
+        '200':
+          description: El adquirente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Adquirente'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    put:
+      tags: [Adquirentes]
+      summary: Modificar un adquirente
+      description: |
+        No afecta documentos ya emitidos, que conservan una copia de los datos
+        vigentes al momento de la emisión (INV-LIN-03).
+      operationId: modificarAdquirente
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdquirenteRequest'
+      responses:
+        '200':
+          description: Adquirente actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Adquirente'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+    delete:
+      tags: [Adquirentes]
+      summary: Desactivar un adquirente
+      description: |
+        No elimina el registro. Lo marca como inactivo para que no pueda usarse en
+        nuevas emisiones, preservando la trazabilidad de los documentos existentes
+        (INV-ADQ-02).
+      operationId: desactivarAdquirente
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      responses:
+        '204':
+          description: Adquirente desactivado.
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  # ─────────────────────────────  PRODUCTOS  ─────────────────────────────
+
+  /productos:
+    get:
+      tags: [Productos]
+      summary: Listar productos
+      operationId: listarProductos
+      parameters:
+        - name: activo
+          in: query
+          schema:
+            type: boolean
+        - name: codigo
+          in: query
+          schema:
+            type: string
+        - name: pagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: tamanoPagina
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Página de productos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaProductos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+    post:
+      tags: [Productos]
+      summary: Registrar un producto
+      description: Implementa RF-07.
+      operationId: crearProducto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoRequest'
+      responses:
+        '201':
+          description: Producto creado.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+  /productos/{id}:
+    get:
+      tags: [Productos]
+      summary: Consultar un producto
+      operationId: consultarProducto
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      responses:
+        '200':
+          description: El producto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    put:
+      tags: [Productos]
+      summary: Modificar un producto
+      description: |
+        Cambiar el precio no afecta documentos ya emitidos, que conservan el precio
+        que se cobró (INV-LIN-03).
+      operationId: modificarProducto
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductoRequest'
+      responses:
+        '200':
+          description: Producto actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Producto'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    delete:
+      tags: [Productos]
+      summary: Desactivar un producto
+      operationId: desactivarProducto
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      responses:
+        '204':
+          description: Producto desactivado.
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  # ─────────────────────────────  EMISOR  ─────────────────────────────
+
+  /emisor:
+    get:
+      tags: [Emisor]
+      summary: Consultar la configuración del emisor
+      description: |
+        No expone el contenido ni la clave del certificado, solo su número de serie
+        y vigencia (INV-CER-02).
+
+        Implementa RF-03.
+      operationId: consultarEmisor
+      responses:
+        '200':
+          description: Configuración del emisor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Emisor'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    put:
+      tags: [Emisor]
+      summary: Configurar el emisor
+      operationId: configurarEmisor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmisorRequest'
+      responses:
+        '200':
+          description: Emisor configurado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Emisor'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+
+  # ─────────────────────────────  NUMERACIÓN  ─────────────────────────────
+
+  /rangos-numeracion:
+    get:
+      tags: [Numeración]
+      summary: Listar rangos de numeración
+      description: |
+        Incluye números disponibles y días restantes de vigencia por rango.
+
+        Implementa RF-10.
+      operationId: listarRangos
+      responses:
+        '200':
+          description: Rangos registrados.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RangoNumeracion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+    post:
+      tags: [Numeración]
+      summary: Registrar un rango de numeración
+      description: |
+        Rechaza rangos con número final menor o igual al inicial, y rangos que se
+        solapen con otro activo del mismo prefijo y tipo (INV-RAN-01, INV-RAN-03).
+
+        Implementa RF-08.
+      operationId: crearRango
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RangoNumeracionRequest'
+      responses:
+        '201':
+          description: Rango creado.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RangoNumeracion'
+        '400':
+          $ref: '#/components/responses/ErrorValidacion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
+# ═══════════════════════════════  COMPONENTES  ═══════════════════════════════
+
+components:
+
+  securitySchemes:
+    LlaveApi:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: |
+        Llave asignada al sistema integrador. Se muestra una sola vez al crearse y
+        no puede recuperarse después (INV-INT-01).
+
+  parameters:
+    DocumentoId:
+      name: id
+      in: path
+      required: true
+      description: Identificador interno del documento.
+      schema:
+        type: string
+        format: uuid
+    RecursoId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+
+    DocumentoCreado:
+      description: |
+        Documento recibido y encolado para procesamiento. **No** significa que haya
+        sido aprobado por la autoridad; significa que fue aceptado por el sistema.
+      headers:
+        Location:
+          description: Dirección para consultar el estado del documento.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Documento'
+
+    DocumentoYaExistia:
+      description: |
+        Ya existía un documento con esa `referenciaExterna` para este integrador.
+        Se devuelve el documento existente con su estado actual, sin crear uno nuevo
+        ni consumir consecutivo (RF-15).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Documento'
+
+    ErrorValidacion:
+      description: La solicitud está mal formada o le faltan datos obligatorios.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemaValidacion'
+          example:
+            type: "https://github.com/Breiner1412/FEV-Core/errors/validacion"
+            title: "Uno o más campos son inválidos"
+            status: 400
+            codigo: "VALIDACION"
+            instance: "/api/v1/facturas"
+            errores:
+              lineas[0].cantidad:
+                - "Debe ser mayor que cero."
+              adquirenteId:
+                - "Es obligatorio."
+
+    ConflictoNegocio:
+      description: |
+        La solicitud es válida en forma, pero viola una regla de negocio o el estado
+        actual del sistema no permite la operación. El campo `codigo` identifica la
+        causa. Ver el catálogo en `docs/05-contrato-api.md`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+          examples:
+            rangoAgotado:
+              summary: No quedan números disponibles
+              value:
+                type: "https://github.com/Breiner1412/FEV-Core/errors/rango-agotado"
+                title: "El rango de numeración está agotado"
+                status: 409
+                codigo: "RANGO_AGOTADO"
+                detail: "El rango SETP con prefijo SETP no tiene números disponibles. Último asignado: 990000999."
+                instance: "/api/v1/facturas"
+            notaExcede:
+              summary: La nota supera el valor de la factura
+              value:
+                type: "https://github.com/Breiner1412/FEV-Core/errors/nota-excede-factura"
+                title: "La nota crédito supera el valor de la factura"
+                status: 409
+                codigo: "NOTA_EXCEDE_VALOR_FACTURA"
+                detail: "El total acumulado de notas crédito (450000.00) superaría el total de la factura (400000.00)."
+                instance: "/api/v1/notas-credito"
+
+    NoAutenticado:
+      description: Falta la llave de API, o la llave no existe o está desactivada.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+          example:
+            type: "https://github.com/Breiner1412/FEV-Core/errors/no-autenticado"
+            title: "Credencial inválida"
+            status: 401
+            codigo: "LLAVE_INVALIDA"
+
+    NoEncontrado:
+      description: El recurso solicitado no existe.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+
+  schemas:
+
+    # ── Enumeraciones ──
+
+    TipoDocumento:
+      type: string
+      enum: [FACTURA, NOTA_CREDITO, NOTA_DEBITO]
+
+    EstadoDocumento:
+      type: string
+      description: |
+        Estados posibles. Ver la máquina de estados en la sección 6 de
+        `docs/02-requerimientos.md`.
+
+        - `RECIBIDO`: aceptado y con consecutivo asignado, pendiente de procesar.
+        - `EN_PROCESO`: generando o firmando el XML.
+        - `TRANSMITIDO`: entregado al servicio de validación, esperando veredicto.
+        - `APROBADO`: validado. Estado terminal.
+        - `RECHAZADO`: rechazado por la autoridad. Estado terminal.
+        - `FALLIDO`: no se pudo completar el proceso. **Resultado desconocido**:
+          no implica que la autoridad no lo haya recibido (RN-13). Estado terminal.
+      enum: [RECIBIDO, EN_PROCESO, TRANSMITIDO, APROBADO, RECHAZADO, FALLIDO]
+
+    TipoImpuesto:
+      type: string
+      enum: [IVA, INC, IVA_EXENTO, IVA_EXCLUIDO]
+
+    FormaPago:
+      type: string
+      enum: [CONTADO, CREDITO]
+
+    MotivoNota:
+      type: string
+      enum:
+        - DEVOLUCION_PARCIAL
+        - ANULACION
+        - REBAJA
+        - DESCUENTO
+        - AJUSTE_PRECIO
+        - OTROS
+
+    # ── Solicitudes de emisión ──
+
+    EmitirFacturaRequest:
+      type: object
+      required: [referenciaExterna, adquirenteId, lineas]
+      properties:
+        referenciaExterna:
+          type: string
+          maxLength: 64
+          description: |
+            Identificador de la operación en el sistema del integrador. Debe ser
+            único por integrador. Reenviar una solicitud con la misma referencia
+            devuelve el documento existente en lugar de crear otro (RF-15).
+          example: "VTA-2026-000145"
+        adquirenteId:
+          type: string
+          format: uuid
+          description: Debe corresponder a un adquirente registrado y activo.
+        fechaEmision:
+          type: string
+          format: date-time
+          description: Si se omite, se usa la fecha y hora del servidor.
+        formaPago:
+          $ref: '#/components/schemas/FormaPago'
+        medioPago:
+          type: string
+          example: "TRANSFERENCIA"
+        observaciones:
+          type: string
+          maxLength: 500
+        lineas:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LineaRequest'
+
+    EmitirNotaRequest:
+      type: object
+      required: [referenciaExterna, documentoReferenciadoId, motivo, lineas]
+      properties:
+        referenciaExterna:
+          type: string
+          maxLength: 64
+        documentoReferenciadoId:
+          type: string
+          format: uuid
+          description: |
+            Factura que se corrige. Debe existir, ser de tipo `FACTURA` y estar en
+            estado `APROBADO` (RN-03, RN-05).
+        motivo:
+          $ref: '#/components/schemas/MotivoNota'
+        observaciones:
+          type: string
+          maxLength: 500
+        fechaEmision:
+          type: string
+          format: date-time
+        lineas:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LineaRequest'
+
+    LineaRequest:
+      type: object
+      required: [productoId, cantidad]
+      properties:
+        productoId:
+          type: string
+          format: uuid
+          description: Debe corresponder a un producto registrado y activo.
+        cantidad:
+          type: number
+          format: double
+          exclusiveMinimum: true
+          minimum: 0
+        precioUnitario:
+          type: number
+          format: double
+          description: |
+            Si se omite, se toma el precio vigente del producto. El valor queda
+            copiado en la línea y no cambia si el producto se modifica después
+            (INV-LIN-03).
+        descuento:
+          type: number
+          format: double
+          minimum: 0
+          default: 0
+          description: No puede superar `cantidad × precioUnitario` (INV-LIN-02).
+
+    # ── Documento ──
+
+    Documento:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo:
+          $ref: '#/components/schemas/TipoDocumento'
+        estado:
+          $ref: '#/components/schemas/EstadoDocumento'
+        referenciaExterna:
+          type: string
+        prefijo:
+          type: string
+          example: "SETP"
+        consecutivo:
+          type: integer
+          format: int64
+          example: 990000123
+        numeroCompleto:
+          type: string
+          description: Prefijo y consecutivo concatenados, como aparece en el documento.
+          example: "SETP990000123"
+        fechaEmision:
+          type: string
+          format: date-time
+        emisor:
+          $ref: '#/components/schemas/DatosTributarios'
+        adquirente:
+          $ref: '#/components/schemas/DatosTributarios'
+        lineas:
+          type: array
+          items:
+            $ref: '#/components/schemas/Linea'
+        totales:
+          $ref: '#/components/schemas/Totales'
+        moneda:
+          type: string
+          example: "COP"
+        documentoReferenciadoId:
+          type: string
+          format: uuid
+          nullable: true
+        motivoReferencia:
+          allOf:
+            - $ref: '#/components/schemas/MotivoNota'
+          nullable: true
+        codigoUnico:
+          type: string
+          nullable: true
+          description: |
+            Asignado por la autoridad al aprobar. Nulo mientras el documento no
+            esté en estado `APROBADO` (RF-20).
+        erroresValidacion:
+          type: array
+          nullable: true
+          description: Presente solo si el estado es `RECHAZADO` (RF-21).
+          items:
+            $ref: '#/components/schemas/ErrorValidacionAutoridad'
+        creadoEn:
+          type: string
+          format: date-time
+        actualizadoEn:
+          type: string
+          format: date-time
+
+    DocumentoResumen:
+      type: object
+      description: Versión reducida para listados.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tipo:
+          $ref: '#/components/schemas/TipoDocumento'
+        estado:
+          $ref: '#/components/schemas/EstadoDocumento'
+        numeroCompleto:
+          type: string
+        fechaEmision:
+          type: string
+          format: date-time
+        adquirenteRazonSocial:
+          type: string
+        totalAPagar:
+          type: number
+          format: double
+        codigoUnico:
+          type: string
+          nullable: true
+
+    Linea:
+      type: object
+      description: |
+        Los valores son copias tomadas al momento de emitir. No cambian si el
+        producto de origen se modifica después (INV-LIN-03).
+      properties:
+        numero:
+          type: integer
+        productoId:
+          type: string
+          format: uuid
+          description: Referencia informativa al producto de origen (INV-LIN-04).
+        codigo:
+          type: string
+        descripcion:
+          type: string
+        unidadMedida:
+          type: string
+        cantidad:
+          type: number
+          format: double
+        precioUnitario:
+          type: number
+          format: double
+        descuento:
+          type: number
+          format: double
+        baseGravable:
+          type: number
+          format: double
+        impuestos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImpuestoLinea'
+        total:
+          type: number
+          format: double
+
+    ImpuestoLinea:
+      type: object
+      properties:
+        tipo:
+          $ref: '#/components/schemas/TipoImpuesto'
+        tarifa:
+          type: number
+          format: double
+          example: 19.0
+        baseGravable:
+          type: number
+          format: double
+        valor:
+          type: number
+          format: double
+
+    Totales:
+      type: object
+      description: |
+        Calculados siempre a partir de las líneas. El redondeo se aplica en este
+        nivel, sobre el total, no línea por línea (RN-06, INV-TOT-02).
+      properties:
+        totalBrutoAntesImpuestos:
+          type: number
+          format: double
+        totalDescuentos:
+          type: number
+          format: double
+        totalBaseImponible:
+          type: number
+          format: double
+        totalImpuestos:
+          type: number
+          format: double
+        totalAPagar:
+          type: number
+          format: double
+
+    TransicionEstado:
+      type: object
+      properties:
+        estadoAnterior:
+          allOf:
+            - $ref: '#/components/schemas/EstadoDocumento'
+          nullable: true
+        estadoNuevo:
+          $ref: '#/components/schemas/EstadoDocumento'
+        ocurridaEn:
+          type: string
+          format: date-time
+        motivo:
+          type: string
+          example: "Transmisión aceptada por el servicio de validación."
+        detalle:
+          type: string
+          nullable: true
+
+    ErrorValidacionAutoridad:
+      type: object
+      properties:
+        codigo:
+          type: string
+          example: "FAB05"
+        descripcion:
+          type: string
+          example: "Total no corresponde con la sumatoria."
+
+    DatosTributarios:
+      type: object
+      description: Copia de los datos vigentes al momento de emitir.
+      properties:
+        tipoIdentificacion:
+          type: string
+        identificacion:
+          type: string
+        digitoVerificacion:
+          type: string
+          nullable: true
+        razonSocial:
+          type: string
+        direccion:
+          type: string
+        municipioCodigo:
+          type: string
+        municipioNombre:
+          type: string
+        correo:
+          type: string
+          format: email
+        regimen:
+          type: string
+        responsabilidades:
+          type: array
+          items:
+            type: string
+
+    # ── Catálogos ──
+
+    AdquirenteRequest:
+      type: object
+      required: [tipoIdentificacion, identificacion, razonSocial, direccion, municipioCodigo]
+      properties:
+        tipoIdentificacion:
+          type: string
+        identificacion:
+          type: string
+        digitoVerificacion:
+          type: string
+        razonSocial:
+          type: string
+        direccion:
+          type: string
+        municipioCodigo:
+          type: string
+        correo:
+          type: string
+          format: email
+        telefono:
+          type: string
+        regimen:
+          type: string
+        responsabilidades:
+          type: array
+          items:
+            type: string
+
+    Adquirente:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            activo:
+              type: boolean
+            creadoEn:
+              type: string
+              format: date-time
+        - $ref: '#/components/schemas/AdquirenteRequest'
+
+    ProductoRequest:
+      type: object
+      required: [codigo, descripcion, unidadMedida, precioUnitario]
+      properties:
+        codigo:
+          type: string
+        descripcion:
+          type: string
+        unidadMedida:
+          type: string
+          example: "94"
+        precioUnitario:
+          type: number
+          format: double
+          minimum: 0
+        impuestos:
+          type: array
+          description: Impuestos aplicables al producto, con su tarifa.
+          items:
+            type: object
+            required: [tipo, tarifa]
+            properties:
+              tipo:
+                $ref: '#/components/schemas/TipoImpuesto'
+              tarifa:
+                type: number
+                format: double
+
+    Producto:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            activo:
+              type: boolean
+            creadoEn:
+              type: string
+              format: date-time
+        - $ref: '#/components/schemas/ProductoRequest'
+
+    EmisorRequest:
+      type: object
+      required: [tipoIdentificacion, identificacion, razonSocial, direccion, municipioCodigo, regimen]
+      properties:
+        tipoIdentificacion:
+          type: string
+        identificacion:
+          type: string
+        digitoVerificacion:
+          type: string
+        razonSocial:
+          type: string
+        nombreComercial:
+          type: string
+        direccion:
+          type: string
+        municipioCodigo:
+          type: string
+        correo:
+          type: string
+          format: email
+        telefono:
+          type: string
+        regimen:
+          type: string
+        responsabilidades:
+          type: array
+          items:
+            type: string
+
+    Emisor:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            certificado:
+              $ref: '#/components/schemas/CertificadoResumen'
+            configuracionCompleta:
+              type: boolean
+              description: |
+                Si es falso, la emisión será rechazada con `EMISOR_INCOMPLETO`
+                (RF-05).
+        - $ref: '#/components/schemas/EmisorRequest'
+
+    CertificadoResumen:
+      type: object
+      description: |
+        Nunca incluye el contenido del certificado ni su clave (INV-CER-02).
+      nullable: true
+      properties:
+        numeroSerie:
+          type: string
+        vigenteDesde:
+          type: string
+          format: date
+        vigenteHasta:
+          type: string
+          format: date
+        vigente:
+          type: boolean
+
+    RangoNumeracionRequest:
+      type: object
+      required: [prefijo, tipoDocumento, numeroInicial, numeroFinal, vigenteDesde, vigenteHasta, numeroAutorizacion]
+      properties:
+        prefijo:
+          type: string
+          example: "SETP"
+        tipoDocumento:
+          $ref: '#/components/schemas/TipoDocumento'
+        numeroInicial:
+          type: integer
+          format: int64
+        numeroFinal:
+          type: integer
+          format: int64
+        vigenteDesde:
+          type: string
+          format: date
+        vigenteHasta:
+          type: string
+          format: date
+        numeroAutorizacion:
+          type: string
+        claveTecnica:
+          type: string
+          writeOnly: true
+          description: No se devuelve en las consultas.
+
+    RangoNumeracion:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            ultimoAsignado:
+              type: integer
+              format: int64
+              nullable: true
+            numerosDisponibles:
+              type: integer
+              format: int64
+            diasParaVencimiento:
+              type: integer
+            agotado:
+              type: boolean
+            vencido:
+              type: boolean
+        - $ref: '#/components/schemas/RangoNumeracionRequest'
+
+    # ── Paginación ──
+
+    Paginacion:
+      type: object
+      properties:
+        pagina:
+          type: integer
+        tamanoPagina:
+          type: integer
+        totalElementos:
+          type: integer
+          format: int64
+        totalPaginas:
+          type: integer
+
+    PaginaDocumentos:
+      allOf:
+        - $ref: '#/components/schemas/Paginacion'
+        - type: object
+          properties:
+            elementos:
+              type: array
+              items:
+                $ref: '#/components/schemas/DocumentoResumen'
+
+    PaginaAdquirentes:
+      allOf:
+        - $ref: '#/components/schemas/Paginacion'
+        - type: object
+          properties:
+            elementos:
+              type: array
+              items:
+                $ref: '#/components/schemas/Adquirente'
+
+    PaginaProductos:
+      allOf:
+        - $ref: '#/components/schemas/Paginacion'
+        - type: object
+          properties:
+            elementos:
+              type: array
+              items:
+                $ref: '#/components/schemas/Producto'
+
+    # ── Errores ──
+
+    Problema:
+      type: object
+      description: |
+        Formato estándar de error (RFC 7807), extendido con `codigo` para que el
+        integrador pueda decidir según la causa sin leer el texto.
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Dirección que describe este tipo de error.
+        title:
+          type: string
+          description: Descripción corta y legible del problema.
+        status:
+          type: integer
+          description: Código de estado HTTP.
+        detail:
+          type: string
+          description: Explicación específica de esta ocurrencia.
+        instance:
+          type: string
+          description: Ruta donde ocurrió.
+        codigo:
+          type: string
+          description: |
+            Código estable de la causa. Es lo que el integrador debe usar para
+            decidir; `title` y `detail` pueden cambiar de redacción.
+          example: "RANGO_AGOTADO"
+        traceId:
+          type: string
+          description: Identificador de correlación para diagnóstico (RNF-10).
+
+    ProblemaValidacion:
+      allOf:
+        - $ref: '#/components/schemas/Problema'
+        - type: object
+          properties:
+            errores:
+              type: object
+              description: Errores por campo.
+              additionalProperties:
+                type: array
+                items:
+                  type: string
