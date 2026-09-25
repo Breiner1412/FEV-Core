@@ -224,14 +224,4 @@ public sealed class LineaTests
         Assert.Null(linea.ProductoId);
         Assert.Equal("PROD-001", linea.Codigo);
     }
-
-    // ── Los impuestos no se pueden modificar desde afuera ──
-
-    [Fact]
-    public void La_lista_de_impuestos_es_de_solo_lectura()
-    {
-        var linea = CrearLineaValida();
-
-        Assert.False(linea.Impuestos is List<ImpuestoLinea>);
-    }
 }

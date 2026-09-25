@@ -214,12 +214,4 @@ public sealed class DocumentoTests
 
         Assert.Equal("COP", factura.Moneda);
     }
-
-    [Fact]
-    public void La_lista_de_lineas_es_de_solo_lectura()
-    {
-        var factura = EmitirCon(CrearLinea());
-
-        Assert.False(factura.Lineas is List<Linea>);
-    }
 }

@@ -28,6 +28,9 @@ public sealed record Totales
     /// <summary>Valor final del documento.</summary>
     public Dinero TotalAPagar { get; }
 
+    /// <summary>Requerido por Entity Framework.</summary>
+    private Totales() { }
+
     private Totales(
         Dinero totalBruto,
         Dinero totalDescuentos,

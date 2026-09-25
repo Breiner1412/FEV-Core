@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using FevCore.Domain.Comun;
 
 namespace FevCore.Domain.Documentos;
@@ -16,7 +15,7 @@ namespace FevCore.Domain.Documentos;
 /// </summary>
 public sealed class Documento
 {
-    private readonly ReadOnlyCollection<Linea> _lineas;
+    private readonly List<Linea> _lineas;
 
     public Guid Id { get; }
     public TipoDocumento Tipo { get; }
@@ -47,6 +46,22 @@ public sealed class Documento
     public IReadOnlyList<Linea> Lineas => _lineas;
     public Totales Totales { get; }
 
+    /// <summary>
+    /// Requerido por Entity Framework para reconstruir el documento desde la
+    /// base de datos. EF asigna las propiedades por reflexion despues de
+    /// llamarlo, asi que los valores de aqui son solo para satisfacer al
+    /// compilador. El dominio NUNCA usa este constructor: la unica entrada
+    /// es EmitirFactura, que verifica todas las invariantes.
+    /// </summary>
+    private Documento()
+    {
+        _lineas = [];
+        ReferenciaExterna = null!;
+        Prefijo = null!;
+        Moneda = null!;
+        Totales = null!;
+    }
+
     private Documento(
         Guid id,
         TipoDocumento tipo,
@@ -57,7 +72,7 @@ public sealed class Documento
         long consecutivo,
         DateTimeOffset fechaEmision,
         string moneda,
-        ReadOnlyCollection<Linea> lineas,
+        List<Linea> lineas,
         Totales totales)
     {
         Id = id;
@@ -149,8 +164,7 @@ public sealed class Documento
 
         var lineasOrdenadas = listaLineas
             .OrderBy(l => l.Numero)
-            .ToList()
-            .AsReadOnly();
+            .ToList();
 
         // INV-DOC-02, RN-09: los totales se derivan de las lineas, siempre.
         var totales = Totales.Calcular(lineasOrdenadas);

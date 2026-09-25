@@ -23,6 +23,15 @@ RUN dotnet publish src/FevCore.Api/FevCore.Api.csproj \
 # Imagen mucho mas liviana: solo sabe ejecutar, no compilar.
 # El SDK y el codigo fuente no viajan a la imagen final.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
+# Npgsql busca esta biblioteca al arrancar, por si la conexion usara
+# autenticacion Kerberos. La nuestra usa usuario y contrasena, asi que no
+# la necesita, pero sin ella imprime un error rojo en cada arranque que
+# parece grave y no lo es. Dos megabytes a cambio de registros limpios.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=build /app .
 

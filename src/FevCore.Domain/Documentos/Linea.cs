@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using FevCore.Domain.Comun;
 
 namespace FevCore.Domain.Documentos;
@@ -14,7 +13,7 @@ namespace FevCore.Domain.Documentos;
 /// </summary>
 public sealed class Linea
 {
-    private readonly ReadOnlyCollection<ImpuestoLinea> _impuestos;
+    private readonly List<ImpuestoLinea> _impuestos;
 
     public int Numero { get; }
 
@@ -44,6 +43,17 @@ public sealed class Linea
     /// <summary>Base gravable mas la suma de los impuestos.</summary>
     public Dinero Total { get; }
 
+    /// <summary>
+    /// Requerido por Entity Framework. Ver la nota equivalente en Documento.
+    /// </summary>
+    private Linea()
+    {
+        _impuestos = [];
+        Codigo = null!;
+        Descripcion = null!;
+        UnidadMedida = null!;
+    }
+
     private Linea(
         int numero,
         Guid? productoId,
@@ -54,7 +64,7 @@ public sealed class Linea
         Dinero precioUnitario,
         Dinero descuento,
         Dinero baseGravable,
-        ReadOnlyCollection<ImpuestoLinea> impuestos,
+        List<ImpuestoLinea> impuestos,
         Dinero total)
     {
         Numero = numero;
@@ -178,7 +188,7 @@ public sealed class Linea
             precioUnitario,
             descuentoAplicado,
             baseGravable,
-            impuestosCalculados.AsReadOnly(),
+            impuestosCalculados,
             total);
     }
 }
