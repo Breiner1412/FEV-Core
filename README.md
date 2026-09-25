@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 0 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 1 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -48,6 +48,40 @@ curl http://localhost:8080/health
 ```json
 {"estado":"ok","momento":"2026-09-25T21:33:12.8682477+00:00"}
 ```
+
+### Emitir una factura
+
+En desarrollo se crea un integrador con una llave conocida, que aparece en los registros al arrancar:
+
+```bash
+docker compose logs api | grep "Llave de API"
+```
+
+```bash
+curl -X POST http://localhost:8080/api/v1/facturas \
+  -H "X-Api-Key: fev_desarrollo_no_usar_en_produccion" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "referenciaExterna": "VTA-001",
+    "lineas": [{
+      "codigo": "PROD-001",
+      "descripcion": "Teclado mecanico",
+      "unidadMedida": "94",
+      "cantidad": 2,
+      "precioUnitario": 150000,
+      "impuestos": [{ "tipo": "IVA", "tarifa": 19 }]
+    }]
+  }'
+```
+
+Responde `202` con el documento y `totalAPagar: 357000`. Guarda el `id` y consúltalo:
+
+```bash
+curl http://localhost:8080/api/v1/documentos/{id} \
+  -H "X-Api-Key: fev_desarrollo_no_usar_en_produccion"
+```
+
+Reenviar la primera petición con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
 
 Para detener: `docker compose down`
 
@@ -112,7 +146,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | Hito | Qué entrega | Estado |
 |---|---|---|
 | H0 | Esqueleto ejecutable, CI, docker-compose | Completo |
-| H1 | Emitir y consultar una factura de punta a punta | Pendiente |
+| H1 | Emitir y consultar una factura de punta a punta | Completo |
 | H2 | Emisor, adquirentes y productos | Pendiente |
 | H3 | Numeración correcta bajo concurrencia | Pendiente |
 | H4 | Notas crédito y débito, máquina de estados | Pendiente |

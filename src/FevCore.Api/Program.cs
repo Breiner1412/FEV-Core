@@ -1,6 +1,11 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using FevCore.Api.Autenticacion;
 using FevCore.Api.Configuracion;
+using FevCore.Api.Errores;
+using FevCore.Api.Registros;
 using FevCore.Application.Abstracciones;
+using FevCore.Application.Documentos;
 using FevCore.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -10,8 +15,28 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── Servicios ──
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(opciones =>
+    {
+        // Las enumeraciones viajan como texto, no como numeros: "APROBADO"
+        // se entiende solo, y un 3 obliga a consultar una tabla de codigos.
+        // La politica de mayusculas con guion bajo produce exactamente los
+        // valores del contrato: Iva -> "IVA", NotaCredito -> "NOTA_CREDITO".
+        opciones.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper));
+    });
+
 builder.Services.AddOpenApi();
+
+// Formato estandar de error para las respuestas que genera el framework,
+// como la validacion del modelo de entrada (RNF-11).
+builder.Services.AddProblemDetails();
+
+// El orden de registro importa: se prueba uno por uno hasta que alguno
+// maneje la excepcion. El generico va de ultimo.
+builder.Services.AddExceptionHandler<ManejadorExcepcionDominio>();
+builder.Services.AddExceptionHandler<ManejadorExcepcionNoPrevista>();
 
 // Abstraccion del reloj, para que las pruebas puedan fijar la hora en vez de
 // depender de la del sistema. Es la version que ya trae el framework de lo
@@ -32,6 +57,10 @@ builder.Services.AddDbContext<FevCoreDbContext>(opciones =>
 });
 
 builder.Services.AddScoped<IRepositorioIntegradores, RepositorioIntegradores>();
+builder.Services.AddScoped<IRepositorioDocumentos, RepositorioDocumentos>();
+
+builder.Services.AddScoped<EmitirFacturaHandler>();
+builder.Services.AddScoped<ConsultarDocumentoHandler>();
 
 // ── Autenticacion y autorizacion ──
 
@@ -54,8 +83,10 @@ builder.Services.AddAuthorization(opciones =>
 var app = builder.Build();
 
 // ── Cadena de procesamiento ──
-// El orden importa: autenticar antes de autorizar, y ambos antes de que la
-// peticion llegue a un controlador.
+// El orden importa: cada pieza se ejecuta en la secuencia en que se declara.
+
+// Primero, para que cualquier error posterior salga en formato Problem Details.
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
@@ -63,6 +94,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+
+// Despues de autenticar, para que el registro pueda incluir el integrador.
+app.UseMiddleware<MiddlewareCorrelacion>();
+
 app.UseAuthorization();
 
 // Aplica las migraciones pendientes al arrancar, para que "docker compose up"
