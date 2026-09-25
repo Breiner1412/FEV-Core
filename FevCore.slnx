@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FevCore.Api/FevCore.Api.csproj" />
+    <Project Path="src/FevCore.Application/FevCore.Application.csproj" />
+    <Project Path="src/FevCore.DianSimulator/FevCore.DianSimulator.csproj" />
+    <Project Path="src/FevCore.Domain/FevCore.Domain.csproj" />
+    <Project Path="src/FevCore.Infrastructure/FevCore.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FevCore.Application.Tests/FevCore.Application.Tests.csproj" />
+    <Project Path="tests/FevCore.Domain.Tests/FevCore.Domain.Tests.csproj" />
+    <Project Path="tests/FevCore.Integration.Tests/FevCore.Integration.Tests.csproj" />
+  </Folder>
+</Solution>
