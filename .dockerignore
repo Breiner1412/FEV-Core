@@ -1,0 +1,17 @@
+# Lo que NO debe entrar al contexto de construccion de Docker.
+# Todo lo que no este excluido aqui se envia al motor de Docker
+# cada vez que se construye una imagen.
+
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+.git/
+.github/
+docs/
+api/
+tests/
+**/*.user
+**/appsettings.Development.json
+.env
+*.md
