@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
 using FevCore.Api.Contratos;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FevCore.Api.Controllers;
 
@@ -11,6 +12,7 @@ namespace FevCore.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("health")]
+[AllowAnonymous]
 public sealed class HealthController : ControllerBase
 {
     [HttpGet]
