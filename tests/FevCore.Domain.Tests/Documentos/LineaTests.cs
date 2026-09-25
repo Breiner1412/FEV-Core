@@ -232,6 +232,6 @@ public sealed class LineaTests
     {
         var linea = CrearLineaValida();
 
-        Assert.IsNotAssignableFrom<List<ImpuestoLinea>>(linea.Impuestos);
+        Assert.False(linea.Impuestos is List<ImpuestoLinea>);
     }
 }
