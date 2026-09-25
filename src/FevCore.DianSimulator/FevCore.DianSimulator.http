@@ -1,0 +1,6 @@
+@FevCore.DianSimulator_HostAddress = http://localhost:5108
+
+GET {{FevCore.DianSimulator_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
