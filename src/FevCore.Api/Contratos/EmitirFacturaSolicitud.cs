@@ -6,9 +6,8 @@ namespace FevCore.Api.Contratos;
 /// <summary>
 /// Cuerpo de POST /api/v1/facturas.
 ///
-/// ALCANCE H1: las lineas traen sus datos en crudo, sin catalogo de
-/// productos. El contrato de la etapa 5 describe la version final, donde
-/// la linea referencia un producto registrado; eso llega en H2.
+/// Desde H2 la linea referencia un producto del catalogo, como describe el
+/// contrato de la etapa 5. Los datos del producto se copian al emitir.
 /// </summary>
 public sealed record EmitirFacturaSolicitud
 {
@@ -21,6 +20,10 @@ public sealed record EmitirFacturaSolicitud
     [StringLength(64, MinimumLength = 1)]
     public required string ReferenciaExterna { get; init; }
 
+    /// <summary>Debe corresponder a un adquirente registrado y activo.</summary>
+    [Required(ErrorMessage = "El adquirente es obligatorio.")]
+    public required Guid AdquirenteId { get; init; }
+
     /// <summary>Si se omite, se usa la fecha y hora del servidor.</summary>
     public DateTimeOffset? FechaEmision { get; init; }
 
@@ -31,17 +34,9 @@ public sealed record EmitirFacturaSolicitud
 
 public sealed record LineaSolicitud
 {
-    [Required]
-    [StringLength(50, MinimumLength = 1)]
-    public required string Codigo { get; init; }
-
-    [Required]
-    [StringLength(500, MinimumLength = 1)]
-    public required string Descripcion { get; init; }
-
-    [Required]
-    [StringLength(10, MinimumLength = 1)]
-    public required string UnidadMedida { get; init; }
+    /// <summary>Debe corresponder a un producto registrado y activo.</summary>
+    [Required(ErrorMessage = "Cada linea debe referenciar un producto.")]
+    public required Guid ProductoId { get; init; }
 
     // ParseLimitsInInvariantCulture es obligatorio: sin el, los limites de
     // texto se convierten con la cultura del sistema, y en una maquina con
@@ -53,18 +48,17 @@ public sealed record LineaSolicitud
         ErrorMessage = "La cantidad debe ser mayor que cero.")]
     public required decimal Cantidad { get; init; }
 
+    /// <summary>
+    /// Si se omite, se usa el precio vigente del producto. En cualquier
+    /// caso queda copiado en la linea y no cambia despues (RN-10).
+    /// </summary>
     [Range(typeof(decimal), "0.000001", "999999999999",
         ParseLimitsInInvariantCulture = true,
         ConvertValueInInvariantCulture = true,
         ErrorMessage = "El precio unitario debe ser mayor que cero.")]
-    public required decimal PrecioUnitario { get; init; }
+    public decimal? PrecioUnitario { get; init; }
 
     public decimal? Descuento { get; init; }
-
-    public IReadOnlyList<ImpuestoSolicitud>? Impuestos { get; init; }
-
-    /// <summary>Referencia informativa al producto de origen. Opcional en H1.</summary>
-    public Guid? ProductoId { get; init; }
 }
 
 public sealed record ImpuestoSolicitud

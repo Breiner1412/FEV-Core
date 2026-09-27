@@ -29,17 +29,13 @@ public sealed class FacturasController(EmitirFacturaHandler manejador) : Control
         var comando = new ComandoEmitirFactura(
             IntegradorId: User.ObtenerIntegradorId(),
             ReferenciaExterna: solicitud.ReferenciaExterna,
+            AdquirenteId: solicitud.AdquirenteId,
             FechaEmision: solicitud.FechaEmision,
             Lineas: [.. solicitud.Lineas.Select(linea => new LineaComando(
-                Codigo: linea.Codigo,
-                Descripcion: linea.Descripcion,
-                UnidadMedida: linea.UnidadMedida,
+                ProductoId: linea.ProductoId,
                 Cantidad: linea.Cantidad,
                 PrecioUnitario: linea.PrecioUnitario,
-                Descuento: linea.Descuento,
-                Impuestos: [.. (linea.Impuestos ?? []).Select(
-                    i => new ImpuestoComando(i.Tipo, i.Tarifa))],
-                ProductoId: linea.ProductoId))]);
+                Descuento: linea.Descuento))]);
 
         var resultado = await manejador.EjecutarAsync(comando, cancelacion);
         var respuesta = RespuestaDocumento.Desde(resultado.Documento);

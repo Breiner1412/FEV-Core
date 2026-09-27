@@ -43,6 +43,26 @@ public sealed class Documento
     public DateTimeOffset FechaEmision { get; }
     public string Moneda { get; }
 
+    /// <summary>
+    /// Referencia al adquirente del catalogo. Informativa: el documento no
+    /// depende de que siga existiendo ni de que sus datos no cambien.
+    /// </summary>
+    public Guid AdquirenteId { get; }
+
+    /// <summary>
+    /// COPIA de los datos del emisor al momento de emitir.
+    ///
+    /// Si el emisor cambia de direccion manana, este documento sigue
+    /// declarando la de hoy, que es la que se firmo (RN-10).
+    /// </summary>
+    public DatosTributarios EmisorSnapshot { get; }
+
+    /// <summary>
+    /// COPIA de los datos del adquirente al momento de emitir.
+    /// Ver la nota de EmisorSnapshot.
+    /// </summary>
+    public DatosTributarios AdquirenteSnapshot { get; }
+
     public IReadOnlyList<Linea> Lineas => _lineas;
     public Totales Totales { get; }
 
@@ -60,6 +80,8 @@ public sealed class Documento
         Prefijo = null!;
         Moneda = null!;
         Totales = null!;
+        EmisorSnapshot = null!;
+        AdquirenteSnapshot = null!;
     }
 
     private Documento(
@@ -72,6 +94,9 @@ public sealed class Documento
         long consecutivo,
         DateTimeOffset fechaEmision,
         string moneda,
+        Guid adquirenteId,
+        DatosTributarios emisorSnapshot,
+        DatosTributarios adquirenteSnapshot,
         List<Linea> lineas,
         Totales totales)
     {
@@ -84,6 +109,9 @@ public sealed class Documento
         Consecutivo = consecutivo;
         FechaEmision = fechaEmision;
         Moneda = moneda;
+        AdquirenteId = adquirenteId;
+        EmisorSnapshot = emisorSnapshot;
+        AdquirenteSnapshot = adquirenteSnapshot;
         _lineas = lineas;
         Totales = totales;
     }
@@ -100,6 +128,9 @@ public sealed class Documento
         string prefijo,
         long consecutivo,
         DateTimeOffset fechaEmision,
+        Guid adquirenteId,
+        DatosTributarios emisorSnapshot,
+        DatosTributarios adquirenteSnapshot,
         IEnumerable<Linea> lineas,
         string moneda = "COP")
     {
@@ -130,6 +161,13 @@ public sealed class Documento
             throw new ExcepcionDominio(
                 "CONSECUTIVO_INVALIDO",
                 $"El consecutivo debe ser mayor que cero. Recibido: {consecutivo}.");
+        }
+
+        if (adquirenteId == Guid.Empty)
+        {
+            throw new ExcepcionDominio(
+                "ADQUIRENTE_REQUERIDO",
+                "Todo documento debe identificar a su adquirente.");
         }
 
         if (string.IsNullOrWhiteSpace(moneda))
@@ -183,6 +221,9 @@ public sealed class Documento
             consecutivo: consecutivo,
             fechaEmision: fechaEmision,
             moneda: moneda.Trim().ToUpperInvariant(),
+            adquirenteId: adquirenteId,
+            emisorSnapshot: emisorSnapshot,
+            adquirenteSnapshot: adquirenteSnapshot,
             lineas: lineasOrdenadas,
             totales: totales);
     }

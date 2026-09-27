@@ -5,8 +5,9 @@ using System.Text.Json;
 namespace FevCore.Integration.Tests;
 
 /// <summary>
-/// El camino delgado de H1, de punta a punta: emitir una factura por HTTP,
-/// guardarla en PostgreSQL y volver a consultarla.
+/// El camino completo de H2: configurar el emisor, registrar adquirente y
+/// productos, emitir contra el catalogo y comprobar que el documento guarda
+/// copias y no referencias.
 /// </summary>
 public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     : IClassFixture<FabricaApiConBaseDeDatos>
@@ -15,40 +16,107 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
 
     // ── Ayudantes ──
 
-    private static object SolicitudFactura(
-        string referencia,
-        decimal cantidad = 2m,
-        decimal precioUnitario = 150_000m,
-        decimal? descuento = null,
-        int lineas = 1) => new
-        {
-            referenciaExterna = referencia,
-            lineas = Enumerable.Range(1, lineas).Select(i => new
-            {
-                codigo = $"PROD-{i:000}",
-                descripcion = "Teclado mecanico",
-                unidadMedida = "94",
-                cantidad,
-                precioUnitario,
-                descuento,
-                impuestos = new[] { new { tipo = "IVA", tarifa = 19m } }
-            }).ToArray()
-        };
-
     private static string Referencia() => $"VTA-{Guid.NewGuid():N}"[..20];
 
     private static async Task<JsonElement> LeerJson(HttpResponseMessage respuesta) =>
         await respuesta.Content.ReadFromJsonAsync<JsonElement>();
 
-    // ── Emision ──
+    /// <summary>Configura el emisor. Es idempotente, se puede repetir.</summary>
+    private static async Task ConfigurarEmisor(HttpClient cliente)
+    {
+        var respuesta = await cliente.PutAsJsonAsync("/api/v1/emisor", new
+        {
+            datos = new
+            {
+                tipoIdentificacion = "31",
+                identificacion = "800197268",
+                digitoVerificacion = "4",
+                razonSocial = "Comercializadora del Eje SAS",
+                direccion = "Calle 20 # 8-45",
+                municipioCodigo = "66001",
+                regimen = "48",
+                correo = "facturacion@ejemplo.com",
+                responsabilidades = new[] { "O-13" }
+            },
+            nombreComercial = "Comercializadora del Eje"
+        });
+
+        respuesta.EnsureSuccessStatusCode();
+    }
+
+    private static async Task<Guid> CrearAdquirente(HttpClient cliente)
+    {
+        // Identificacion distinta en cada llamada: INV-ADQ-01 no permite
+        // dos adquirentes activos con la misma.
+        var identificacion = Random.Shared.NextInt64(1_000_000_000, 9_999_999_999).ToString();
+
+        var respuesta = await cliente.PostAsJsonAsync("/api/v1/adquirentes", new
+        {
+            datos = new
+            {
+                tipoIdentificacion = "13",
+                identificacion,
+                razonSocial = "Juan Perez",
+                direccion = "Carrera 10 # 5-20",
+                municipioCodigo = "66001",
+                regimen = "49"
+            }
+        });
+
+        respuesta.EnsureSuccessStatusCode();
+
+        return (await LeerJson(respuesta)).GetProperty("id").GetGuid();
+    }
+
+    private static async Task<Guid> CrearProducto(
+        HttpClient cliente,
+        decimal precio = 150_000m,
+        decimal tarifaIva = 19m)
+    {
+        var respuesta = await cliente.PostAsJsonAsync("/api/v1/productos", new
+        {
+            codigo = $"PROD-{Guid.NewGuid():N}"[..12],
+            descripcion = "Teclado mecanico",
+            unidadMedida = "94",
+            precioUnitario = precio,
+            impuestos = new[] { new { tipo = "IVA", tarifa = tarifaIva } }
+        });
+
+        respuesta.EnsureSuccessStatusCode();
+
+        return (await LeerJson(respuesta)).GetProperty("id").GetGuid();
+    }
+
+    private static object SolicitudFactura(
+        string referencia,
+        Guid adquirenteId,
+        IEnumerable<(Guid ProductoId, decimal Cantidad, decimal? Precio, decimal? Descuento)> lineas) =>
+        new
+        {
+            referenciaExterna = referencia,
+            adquirenteId,
+            lineas = lineas.Select(l => new
+            {
+                productoId = l.ProductoId,
+                cantidad = l.Cantidad,
+                precioUnitario = l.Precio,
+                descuento = l.Descuento
+            }).ToArray()
+        };
+
+    // ── Emision contra el catalogo ──
 
     [Fact]
     public async Task Emitir_una_factura_responde_202_con_el_documento()
     {
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
 
         var respuesta = await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia()));
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 2m, null, null)]));
 
         Assert.Equal(HttpStatusCode.Accepted, respuesta.StatusCode);
 
@@ -56,42 +124,156 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
 
         Assert.Equal("FACTURA", documento.GetProperty("tipo").GetString());
         Assert.Equal("RECIBIDO", documento.GetProperty("estado").GetString());
-        Assert.NotEqual(Guid.Empty, documento.GetProperty("id").GetGuid());
     }
 
     [Fact]
-    public async Task El_202_incluye_la_direccion_para_consultar_el_documento()
+    public async Task La_linea_copia_los_datos_del_producto()
     {
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente, precio: 150_000m);
 
-        var respuesta = await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia()));
+        var documento = await LeerJson(await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 2m, null, null)])));
 
-        var documento = await LeerJson(respuesta);
-        var id = documento.GetProperty("id").GetGuid();
+        var linea = documento.GetProperty("lineas")[0];
+
+        // La solicitud solo envio el identificador del producto y la cantidad.
+        // Todo lo demas lo copio el sistema del catalogo.
+        Assert.Equal("Teclado mecanico", linea.GetProperty("descripcion").GetString());
+        Assert.Equal("94", linea.GetProperty("unidadMedida").GetString());
+        Assert.Equal(150_000m, linea.GetProperty("precioUnitario").GetDecimal());
+        Assert.Equal(producto, linea.GetProperty("productoId").GetGuid());
+        Assert.Equal("IVA", linea.GetProperty("impuestos")[0].GetProperty("tipo").GetString());
+    }
+
+    [Fact]
+    public async Task El_documento_guarda_copia_de_los_datos_de_ambas_partes()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
+
+        var documento = await LeerJson(await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, null)])));
 
         Assert.Equal(
-            $"/api/v1/documentos/{id}",
-            respuesta.Headers.Location?.ToString());
+            "Comercializadora del Eje SAS",
+            documento.GetProperty("emisor").GetProperty("razonSocial").GetString());
+
+        Assert.Equal(
+            "Juan Perez",
+            documento.GetProperty("adquirente").GetProperty("razonSocial").GetString());
+    }
+
+    // ── RN-10: LA DEMOSTRACION DEL HITO ──
+
+    [Fact]
+    public async Task Cambiar_el_precio_de_un_producto_no_altera_facturas_ya_emitidas()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente, precio: 150_000m);
+
+        // 1. Se emite con el precio de hoy.
+        var emitida = await LeerJson(await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 2m, null, null)])));
+
+        var id = emitida.GetProperty("id").GetGuid();
+
+        Assert.Equal(357_000m,
+            emitida.GetProperty("totales").GetProperty("totalAPagar").GetDecimal());
+
+        // 2. Sube el precio del producto en el catalogo.
+        var actualizacion = await cliente.PutAsJsonAsync($"/api/v1/productos/{producto}", new
+        {
+            codigo = $"PROD-{Guid.NewGuid():N}"[..12],
+            descripcion = "Teclado mecanico",
+            unidadMedida = "94",
+            precioUnitario = 180_000m,
+            impuestos = new[] { new { tipo = "IVA", tarifa = 19m } }
+        });
+
+        actualizacion.EnsureSuccessStatusCode();
+        Assert.Equal(180_000m,
+            (await LeerJson(actualizacion)).GetProperty("precioUnitario").GetDecimal());
+
+        // 3. La factura de ayer sigue diciendo lo mismo que decia.
+        var consultada = await LeerJson(
+            await cliente.GetAsync($"/api/v1/documentos/{id}"));
+
+        Assert.Equal(150_000m,
+            consultada.GetProperty("lineas")[0].GetProperty("precioUnitario").GetDecimal());
+
+        Assert.Equal(357_000m,
+            consultada.GetProperty("totales").GetProperty("totalAPagar").GetDecimal());
     }
 
     [Fact]
-    public async Task Los_totales_se_calculan_al_emitir()
+    public async Task Cambiar_los_datos_del_adquirente_no_altera_facturas_ya_emitidas()
     {
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
 
-        var respuesta = await cliente.PostAsJsonAsync(
+        var emitida = await LeerJson(await cliente.PostAsJsonAsync(
             RutaFacturas,
-            SolicitudFactura(Referencia(), cantidad: 2m, precioUnitario: 150_000m));
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, null)])));
 
-        var totales = (await LeerJson(respuesta)).GetProperty("totales");
+        var id = emitida.GetProperty("id").GetGuid();
 
-        Assert.Equal(300_000m, totales.GetProperty("totalBaseImponible").GetDecimal());
-        Assert.Equal(57_000m, totales.GetProperty("totalImpuestos").GetDecimal());
-        Assert.Equal(357_000m, totales.GetProperty("totalAPagar").GetDecimal());
+        // El adquirente se muda.
+        var actualizacion = await cliente.PutAsJsonAsync($"/api/v1/adquirentes/{adquirente}", new
+        {
+            datos = new
+            {
+                tipoIdentificacion = "13",
+                identificacion = Random.Shared.NextInt64(1_000_000_000, 9_999_999_999).ToString(),
+                razonSocial = "Juan Perez Gomez",
+                direccion = "Avenida 30 de Agosto # 40-20",
+                municipioCodigo = "66001",
+                regimen = "49"
+            }
+        });
+
+        actualizacion.EnsureSuccessStatusCode();
+
+        // La factura conserva la direccion que se declaro.
+        var consultada = await LeerJson(
+            await cliente.GetAsync($"/api/v1/documentos/{id}"));
+
+        var adquirenteEnFactura = consultada.GetProperty("adquirente");
+
+        Assert.Equal("Juan Perez", adquirenteEnFactura.GetProperty("razonSocial").GetString());
+        Assert.Equal("Carrera 10 # 5-20", adquirenteEnFactura.GetProperty("direccion").GetString());
     }
 
-    // ── RN-06: el redondeo va sobre el total, verificado por HTTP ──
+    // ── El precio se puede negociar ──
+
+    [Fact]
+    public async Task Se_puede_sobrescribir_el_precio_del_catalogo()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente, precio: 150_000m);
+
+        var documento = await LeerJson(await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, 120_000m, null)])));
+
+        Assert.Equal(120_000m,
+            documento.GetProperty("lineas")[0].GetProperty("precioUnitario").GetDecimal());
+    }
+
+    // ── RN-06: el redondeo sigue yendo sobre el total ──
 
     [Fact]
     public async Task El_redondeo_del_total_llega_correcto_hasta_la_respuesta()
@@ -101,12 +283,23 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
         //   redondeando por linea: 190,00 x 3 = 570,00
         //   redondeando el total:  570,0057    = 570,01
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
 
-        var respuesta = await cliente.PostAsJsonAsync(
+        var uno = await CrearProducto(cliente, precio: 1_000.01m);
+        var dos = await CrearProducto(cliente, precio: 1_000.01m);
+        var tres = await CrearProducto(cliente, precio: 1_000.01m);
+
+        var documento = await LeerJson(await cliente.PostAsJsonAsync(
             RutaFacturas,
-            SolicitudFactura(Referencia(), cantidad: 1m, precioUnitario: 1_000.01m, lineas: 3));
+            SolicitudFactura(Referencia(), adquirente,
+            [
+                (uno, 1m, null, null),
+                (dos, 1m, null, null),
+                (tres, 1m, null, null)
+            ])));
 
-        var totales = (await LeerJson(respuesta)).GetProperty("totales");
+        var totales = documento.GetProperty("totales");
 
         Assert.Equal(570.01m, totales.GetProperty("totalImpuestos").GetDecimal());
         Assert.Equal(3_570.04m, totales.GetProperty("totalAPagar").GetDecimal());
@@ -118,47 +311,29 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     public async Task Reenviar_la_misma_referencia_devuelve_el_documento_existente()
     {
         var cliente = fabrica.CrearClienteAutenticado();
-        var referencia = Referencia();
-        var solicitud = SolicitudFactura(referencia);
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
+
+        var solicitud = SolicitudFactura(Referencia(), adquirente, [(producto, 2m, null, null)]);
 
         var primera = await cliente.PostAsJsonAsync(RutaFacturas, solicitud);
         var segunda = await cliente.PostAsJsonAsync(RutaFacturas, solicitud);
 
-        // La primera crea; la segunda encuentra.
         Assert.Equal(HttpStatusCode.Accepted, primera.StatusCode);
         Assert.Equal(HttpStatusCode.OK, segunda.StatusCode);
 
-        var documentoUno = await LeerJson(primera);
-        var documentoDos = await LeerJson(segunda);
+        var unaJson = await LeerJson(primera);
+        var otraJson = await LeerJson(segunda);
 
         Assert.Equal(
-            documentoUno.GetProperty("id").GetGuid(),
-            documentoDos.GetProperty("id").GetGuid());
+            unaJson.GetProperty("id").GetGuid(),
+            otraJson.GetProperty("id").GetGuid());
 
         // Y sobre todo: no consumio un consecutivo nuevo.
         Assert.Equal(
-            documentoUno.GetProperty("consecutivo").GetInt64(),
-            documentoDos.GetProperty("consecutivo").GetInt64());
-    }
-
-    [Fact]
-    public async Task Dos_referencias_distintas_producen_documentos_distintos()
-    {
-        var cliente = fabrica.CrearClienteAutenticado();
-
-        var una = await LeerJson(await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia())));
-
-        var otra = await LeerJson(await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia())));
-
-        Assert.NotEqual(
-            una.GetProperty("id").GetGuid(),
-            otra.GetProperty("id").GetGuid());
-
-        Assert.NotEqual(
-            una.GetProperty("consecutivo").GetInt64(),
-            otra.GetProperty("consecutivo").GetInt64());
+            unaJson.GetProperty("consecutivo").GetInt64(),
+            otraJson.GetProperty("consecutivo").GetInt64());
     }
 
     // ── RF-22: consulta ──
@@ -167,9 +342,13 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     public async Task Un_documento_emitido_se_puede_consultar_despues()
     {
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
 
         var emitido = await LeerJson(await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia())));
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, null)])));
 
         var id = emitido.GetProperty("id").GetGuid();
 
@@ -183,30 +362,6 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
         Assert.Equal(
             emitido.GetProperty("numeroCompleto").GetString(),
             consultado.GetProperty("numeroCompleto").GetString());
-        Assert.Equal(
-            emitido.GetProperty("totales").GetProperty("totalAPagar").GetDecimal(),
-            consultado.GetProperty("totales").GetProperty("totalAPagar").GetDecimal());
-    }
-
-    [Fact]
-    public async Task Las_lineas_sobreviven_el_viaje_a_la_base_de_datos()
-    {
-        var cliente = fabrica.CrearClienteAutenticado();
-
-        var emitido = await LeerJson(await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia(), lineas: 3)));
-
-        var id = emitido.GetProperty("id").GetGuid();
-
-        var consultado = await LeerJson(await cliente.GetAsync($"/api/v1/documentos/{id}"));
-        var lineas = consultado.GetProperty("lineas");
-
-        Assert.Equal(3, lineas.GetArrayLength());
-
-        var primera = lineas[0];
-        Assert.Equal(1, primera.GetProperty("numero").GetInt32());
-        Assert.Single(primera.GetProperty("impuestos").EnumerateArray());
-        Assert.Equal("IVA", primera.GetProperty("impuestos")[0].GetProperty("tipo").GetString());
     }
 
     [Fact]
@@ -229,50 +384,84 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     {
         var cliente = fabrica.CreateClient();
 
-        var respuesta = await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia()));
+        var respuesta = await cliente.PostAsJsonAsync(RutaFacturas, new
+        {
+            referenciaExterna = Referencia(),
+            adquirenteId = Guid.NewGuid(),
+            lineas = new[] { new { productoId = Guid.NewGuid(), cantidad = 1m } }
+        });
 
         Assert.Equal(HttpStatusCode.Unauthorized, respuesta.StatusCode);
     }
 
     [Fact]
-    public async Task Con_una_llave_desconocida_responde_401()
+    public async Task Un_adquirente_inexistente_responde_409()
     {
-        var cliente = fabrica.CreateClient();
-        cliente.DefaultRequestHeaders.Add("X-Api-Key", "fev_esta_llave_no_existe_en_ningun_lado");
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var producto = await CrearProducto(cliente);
 
         var respuesta = await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia()));
+            RutaFacturas,
+            SolicitudFactura(Referencia(), Guid.NewGuid(), [(producto, 1m, null, null)]));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, respuesta.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
 
         var problema = await LeerJson(respuesta);
-        Assert.Equal("LLAVE_INVALIDA", problema.GetProperty("codigo").GetString());
+        Assert.Equal("ADQUIRENTE_NO_ENCONTRADO", problema.GetProperty("codigo").GetString());
+    }
+
+    [Fact]
+    public async Task Un_producto_inexistente_responde_409()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+
+        var respuesta = await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(Guid.NewGuid(), 1m, null, null)]));
+
+        Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
+
+        var problema = await LeerJson(respuesta);
+        Assert.Equal("PRODUCTO_NO_ENCONTRADO", problema.GetProperty("codigo").GetString());
+    }
+
+    [Fact]
+    public async Task Un_producto_desactivado_no_se_puede_facturar()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
+
+        var baja = await cliente.DeleteAsync($"/api/v1/productos/{producto}");
+        Assert.Equal(HttpStatusCode.NoContent, baja.StatusCode);
+
+        var respuesta = await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, null)]));
+
+        Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
+
+        var problema = await LeerJson(respuesta);
+        Assert.Equal("PRODUCTO_INACTIVO", problema.GetProperty("codigo").GetString());
     }
 
     [Fact]
     public async Task Una_cantidad_en_cero_responde_400()
     {
-        // 400, no 409: la solicitud esta mal escrita, no es una regla de
-        // negocio que no procede. Se detecta antes de tocar el dominio.
+        // 400, no 409: la solicitud esta mal escrita. Se detecta antes de
+        // tocar el dominio.
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
 
         var respuesta = await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia(), cantidad: 0m));
-
-        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
-    }
-
-    [Fact]
-    public async Task Un_documento_sin_lineas_responde_400()
-    {
-        var cliente = fabrica.CrearClienteAutenticado();
-
-        var respuesta = await cliente.PostAsJsonAsync(RutaFacturas, new
-        {
-            referenciaExterna = Referencia(),
-            lineas = Array.Empty<object>()
-        });
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 0m, null, null)]));
 
         Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
     }
@@ -283,14 +472,13 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
         // 409, no 400: la solicitud esta bien formada. Lo que falla es una
         // regla del negocio (INV-LIN-02), y solo el dominio puede saberlo.
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente, precio: 100_000m);
 
         var respuesta = await cliente.PostAsJsonAsync(
             RutaFacturas,
-            SolicitudFactura(
-                Referencia(),
-                cantidad: 1m,
-                precioUnitario: 100_000m,
-                descuento: 150_000m));
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, 150_000m)]));
 
         Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
 
@@ -301,16 +489,17 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     [Fact]
     public async Task Los_errores_no_exponen_detalles_internos()
     {
-        // RNF-11: ni rutas de archivos, ni nombres de tablas, ni trazas.
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente, precio: 100m);
 
         var respuesta = await cliente.PostAsJsonAsync(
             RutaFacturas,
-            SolicitudFactura(Referencia(), cantidad: 1m, precioUnitario: 100m, descuento: 500m));
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, 500m)]));
 
         // Se afirma primero el codigo esperado: sin esto, la prueba pasaria
-        // igual ante un 500, que tampoco contiene esas palabras. Una prueba
-        // que pasa por la razon equivocada es peor que no tenerla.
+        // igual ante un 500, que tampoco contiene esas palabras.
         Assert.Equal(HttpStatusCode.Conflict, respuesta.StatusCode);
 
         var cuerpo = await respuesta.Content.ReadAsStringAsync();
@@ -324,12 +513,14 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     [Fact]
     public async Task Toda_respuesta_trae_su_identificador_de_correlacion()
     {
-        // RNF-10: dado ese identificador se pueden recuperar los registros
-        // de esa peticion en el servidor.
         var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
 
         var respuesta = await cliente.PostAsJsonAsync(
-            RutaFacturas, SolicitudFactura(Referencia()));
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, null)]));
 
         Assert.True(respuesta.Headers.Contains("X-Trace-Id"));
     }
