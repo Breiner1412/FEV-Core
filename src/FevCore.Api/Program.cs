@@ -7,6 +7,7 @@ using FevCore.Api.Registros;
 using FevCore.Application.Abstracciones;
 using FevCore.Application.Catalogos;
 using FevCore.Application.Documentos;
+using FevCore.Application.Numeracion;
 using FevCore.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -62,12 +63,15 @@ builder.Services.AddScoped<IRepositorioDocumentos, RepositorioDocumentos>();
 builder.Services.AddScoped<IRepositorioEmisor, RepositorioEmisor>();
 builder.Services.AddScoped<IRepositorioAdquirentes, RepositorioAdquirentes>();
 builder.Services.AddScoped<IRepositorioProductos, RepositorioProductos>();
+builder.Services.AddScoped<IRepositorioRangos, RepositorioRangos>();
+builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 
 builder.Services.AddScoped<EmitirFacturaHandler>();
 builder.Services.AddScoped<ConsultarDocumentoHandler>();
 builder.Services.AddScoped<GestionEmisor>();
 builder.Services.AddScoped<GestionAdquirentes>();
 builder.Services.AddScoped<GestionProductos>();
+builder.Services.AddScoped<GestionRangos>();
 
 // ── Autenticacion y autorizacion ──
 

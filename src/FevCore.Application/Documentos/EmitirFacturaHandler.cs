@@ -11,19 +11,19 @@ namespace FevCore.Application.Documentos;
 /// Desde H2 resuelve las lineas contra el catalogo y COPIA sus datos al
 /// documento. Esa copia es lo que hace que una factura emitida no cambie
 /// nunca, aunque el catalogo si (RN-10).
+///
+/// Desde H3 el numero sale de un rango autorizado por la DIAN, y se toma
+/// dentro de una transaccion con la fila del rango bloqueada (ADR-0009).
 /// </summary>
 public sealed class EmitirFacturaHandler(
     IRepositorioDocumentos repositorio,
     IRepositorioEmisor repositorioEmisor,
     IRepositorioAdquirentes repositorioAdquirentes,
     IRepositorioProductos repositorioProductos,
+    IRepositorioRangos repositorioRangos,
+    IUnidadDeTrabajo unidadDeTrabajo,
     TimeProvider reloj)
 {
-    /// <summary>
-    /// Prefijo fijo mientras no existan rangos de numeracion. Llega en H3.
-    /// </summary>
-    private const string PrefijoProvisional = "SETP";
-
     public async Task<ResultadoEmision> EjecutarAsync(
         ComandoEmitirFactura comando,
         CancellationToken cancelacion = default)
@@ -72,25 +72,51 @@ public sealed class EmitirFacturaHandler(
 
         var lineas = ConstruirLineas(comando.Lineas, productos);
 
-        // ── 5. Consecutivo ──
-        var consecutivo = await repositorio.ObtenerSiguienteConsecutivoProvisionalAsync(
-            PrefijoProvisional,
-            cancelacion);
+        var fechaEmision = comando.FechaEmision ?? reloj.GetUtcNow();
 
-        // ── 6. Emitir, copiando los datos de ambas partes ──
+        // ── 5. Numero y guardado, en una sola transaccion ──
+        //
+        // Todo lo anterior (validaciones, catalogo, calculo de lineas) quedo
+        // FUERA a proposito. Dentro de la transaccion la fila del rango esta
+        // bloqueada y cualquier otra emision espera: lo unico que debe pasar
+        // aqui es tomar el numero y guardar. Cuanto menos tiempo dure, mas
+        // facturas por segundo aguanta el sistema (RNF-01).
+        await using var transaccion =
+            await unidadDeTrabajo.IniciarTransaccionAsync(cancelacion);
+
+        var rango = await repositorioRangos.TomarVigenteParaActualizarAsync(
+            TipoDocumento.Factura,
+            DateOnly.FromDateTime(fechaEmision.UtcDateTime),
+            cancelacion)
+            ?? throw new ExcepcionDominio(
+                "RANGO_NO_DISPONIBLE",
+                "No hay un rango de numeracion vigente para facturas de venta " +
+                "en esa fecha. Registrelo en POST /api/v1/rangos-numeracion.");
+
+        // Si el rango esta vencido o agotado, esto lanza y la transaccion se
+        // revierte al descartarse: no queda numero consumido ni documento.
+        var consecutivo = rango.TomarSiguienteConsecutivo(
+            DateOnly.FromDateTime(fechaEmision.UtcDateTime));
+
         var documento = Documento.EmitirFactura(
             integradorId: comando.IntegradorId,
             referenciaExterna: comando.ReferenciaExterna,
-            prefijo: PrefijoProvisional,
+            prefijo: rango.Prefijo,
             consecutivo: consecutivo,
-            fechaEmision: comando.FechaEmision ?? reloj.GetUtcNow(),
+            fechaEmision: fechaEmision,
             adquirenteId: adquirente.Id,
             emisorSnapshot: emisor.Datos,
             adquirenteSnapshot: adquirente.Datos,
             lineas: lineas);
 
         await repositorio.AgregarAsync(documento, cancelacion);
+
+        // Un solo SaveChanges guarda las dos cosas: el documento nuevo y el
+        // contador del rango, que Entity Framework ya tiene marcado como
+        // modificado porque la entidad vino rastreada de la consulta.
         await repositorio.GuardarCambiosAsync(cancelacion);
+
+        await transaccion.ConfirmarAsync(cancelacion);
 
         return new ResultadoEmision(documento, YaExistia: false);
     }

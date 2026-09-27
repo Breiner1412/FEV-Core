@@ -23,17 +23,6 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
                      d.ReferenciaExterna == referenciaExterna,
                 cancelacion);
 
-    public async Task<long> ObtenerSiguienteConsecutivoProvisionalAsync(
-        string prefijo,
-        CancellationToken cancelacion = default)
-    {
-        var maximo = await contexto.Documentos
-            .Where(d => d.Prefijo == prefijo)
-            .MaxAsync(d => (long?)d.Consecutivo, cancelacion);
-
-        return (maximo ?? 0) + 1;
-    }
-
     public async Task AgregarAsync(
         Documento documento,
         CancellationToken cancelacion = default) =>
