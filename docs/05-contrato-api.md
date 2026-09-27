@@ -118,11 +118,16 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 
 | Código | Estado | Significado |
 |---|---|---|
-| `RANGO_NO_ENCONTRADO` | 409 | No hay rango registrado para ese tipo de documento. |
+| `RANGO_NO_DISPONIBLE` | 409 | No hay rango vigente para ese tipo de documento en esa fecha. No se puede emitir. *(RN-02)* |
+| `RANGO_NO_ENCONTRADO` | 404 | Se consultó un rango por identificador y no existe. |
 | `RANGO_AGOTADO` | 409 | No quedan números disponibles. *(INV-RAN-04)* |
 | `RANGO_VENCIDO` | 409 | El rango está fuera de su periodo de vigencia. *(INV-RAN-04)* |
-| `RANGO_SOLAPADO` | 409 | El rango que se intenta registrar se cruza con otro activo. *(INV-RAN-03)* |
-| `RANGO_LIMITES_INVALIDOS` | 400 | El número final es menor o igual al inicial. *(INV-RAN-01)* |
+| `RANGO_SOLAPADO` | 409 | El rango que se intenta registrar comparte números o fechas con otro del mismo tipo. *(INV-RAN-03)* |
+| `RANGO_LIMITES_INVALIDOS` | 409 | El número final es menor o igual al inicial. *(INV-RAN-01)* |
+| `RANGO_VIGENCIA_INVALIDA` | 409 | La fecha de vencimiento no es posterior a la de inicio. |
+| `RANGO_PREFIJO_REQUERIDO` | 409 | El prefijo viene vacío. |
+| `RANGO_AUTORIZACION_REQUERIDA` | 409 | El número de autorización viene vacío. |
+| `RANGO_CLAVE_TECNICA_REQUERIDA` | 409 | La clave técnica viene vacía. |
 
 ### 4.4 Catálogos
 

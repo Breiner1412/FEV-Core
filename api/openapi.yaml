@@ -675,6 +675,25 @@ paths:
         '409':
           $ref: '#/components/responses/ConflictoNegocio'
 
+  /rangos-numeracion/{id}:
+    get:
+      tags: [Numeración]
+      summary: Consultar un rango de numeración
+      operationId: consultarRango
+      parameters:
+        - $ref: '#/components/parameters/RecursoId'
+      responses:
+        '200':
+          description: El rango.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RangoNumeracion'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
 # ═══════════════════════════════  COMPONENTES  ═══════════════════════════════
 
 components:
@@ -1306,7 +1325,7 @@ components:
 
     RangoNumeracionRequest:
       type: object
-      required: [prefijo, tipoDocumento, numeroInicial, numeroFinal, vigenteDesde, vigenteHasta, numeroAutorizacion]
+      required: [prefijo, tipoDocumento, numeroInicial, numeroFinal, vigenteDesde, vigenteHasta, numeroAutorizacion, claveTecnica]
       properties:
         prefijo:
           type: string
@@ -1350,8 +1369,11 @@ components:
               type: integer
             agotado:
               type: boolean
-            vencido:
+            vigente:
               type: boolean
+              description: |
+                Si la fecha de hoy cae dentro del periodo de vigencia. Es falso
+                tanto para un rango vencido como para uno que aun no empieza.
         - $ref: '#/components/schemas/RangoNumeracionRequest'
 
     # ── Paginación ──

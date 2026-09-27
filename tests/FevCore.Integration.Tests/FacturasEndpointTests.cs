@@ -15,94 +15,43 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
     private const string RutaFacturas = "/api/v1/facturas";
 
     // ── Ayudantes ──
+    //
+    // Delegan en AyudantesPruebas para no repetir el montaje que tambien
+    // necesitan las pruebas de numeracion. Los nombres se conservan tal cual
+    // para que ninguna de las pruebas de abajo tenga que cambiar.
 
-    private static string Referencia() => $"VTA-{Guid.NewGuid():N}"[..20];
+    private static string Referencia() => AyudantesPruebas.Referencia();
 
-    private static async Task<JsonElement> LeerJson(HttpResponseMessage respuesta) =>
-        await respuesta.Content.ReadFromJsonAsync<JsonElement>();
+    private static Task<JsonElement> LeerJson(HttpResponseMessage respuesta) =>
+        AyudantesPruebas.LeerJson(respuesta);
 
-    /// <summary>Configura el emisor. Es idempotente, se puede repetir.</summary>
+    /// <summary>
+    /// Montaje minimo para poder emitir: emisor configurado y un rango de
+    /// numeracion vigente.
+    ///
+    /// El rango entra aqui en H3. Antes, con el consecutivo provisional,
+    /// bastaba con el emisor; ahora RN-02 exige autorizacion de numeracion.
+    /// </summary>
     private static async Task ConfigurarEmisor(HttpClient cliente)
     {
-        var respuesta = await cliente.PutAsJsonAsync("/api/v1/emisor", new
-        {
-            datos = new
-            {
-                tipoIdentificacion = "31",
-                identificacion = "800197268",
-                digitoVerificacion = "4",
-                razonSocial = "Comercializadora del Eje SAS",
-                direccion = "Calle 20 # 8-45",
-                municipioCodigo = "66001",
-                regimen = "48",
-                correo = "facturacion@ejemplo.com",
-                responsabilidades = new[] { "O-13" }
-            },
-            nombreComercial = "Comercializadora del Eje"
-        });
-
-        respuesta.EnsureSuccessStatusCode();
+        await AyudantesPruebas.ConfigurarEmisor(cliente);
+        await AyudantesPruebas.AsegurarRangoFacturas(cliente);
     }
 
-    private static async Task<Guid> CrearAdquirente(HttpClient cliente)
-    {
-        // Identificacion distinta en cada llamada: INV-ADQ-01 no permite
-        // dos adquirentes activos con la misma.
-        var identificacion = Random.Shared.NextInt64(1_000_000_000, 9_999_999_999).ToString();
+    private static Task<Guid> CrearAdquirente(HttpClient cliente) =>
+        AyudantesPruebas.CrearAdquirente(cliente);
 
-        var respuesta = await cliente.PostAsJsonAsync("/api/v1/adquirentes", new
-        {
-            datos = new
-            {
-                tipoIdentificacion = "13",
-                identificacion,
-                razonSocial = "Juan Perez",
-                direccion = "Carrera 10 # 5-20",
-                municipioCodigo = "66001",
-                regimen = "49"
-            }
-        });
-
-        respuesta.EnsureSuccessStatusCode();
-
-        return (await LeerJson(respuesta)).GetProperty("id").GetGuid();
-    }
-
-    private static async Task<Guid> CrearProducto(
+    private static Task<Guid> CrearProducto(
         HttpClient cliente,
         decimal precio = 150_000m,
-        decimal tarifaIva = 19m)
-    {
-        var respuesta = await cliente.PostAsJsonAsync("/api/v1/productos", new
-        {
-            codigo = $"PROD-{Guid.NewGuid():N}"[..12],
-            descripcion = "Teclado mecanico",
-            unidadMedida = "94",
-            precioUnitario = precio,
-            impuestos = new[] { new { tipo = "IVA", tarifa = tarifaIva } }
-        });
-
-        respuesta.EnsureSuccessStatusCode();
-
-        return (await LeerJson(respuesta)).GetProperty("id").GetGuid();
-    }
+        decimal tarifaIva = 19m) =>
+        AyudantesPruebas.CrearProducto(cliente, precio, tarifaIva);
 
     private static object SolicitudFactura(
         string referencia,
         Guid adquirenteId,
         IEnumerable<(Guid ProductoId, decimal Cantidad, decimal? Precio, decimal? Descuento)> lineas) =>
-        new
-        {
-            referenciaExterna = referencia,
-            adquirenteId,
-            lineas = lineas.Select(l => new
-            {
-                productoId = l.ProductoId,
-                cantidad = l.Cantidad,
-                precioUnitario = l.Precio,
-                descuento = l.Descuento
-            }).ToArray()
-        };
+        AyudantesPruebas.SolicitudFactura(referencia, adquirenteId, lineas);
 
     // ── Emision contra el catalogo ──
 

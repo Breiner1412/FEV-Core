@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 2 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 3 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -83,7 +83,30 @@ curl -X PUT $API/emisor -H "X-Api-Key: $LLAVE" -H "Content-Type: application/jso
 
 El dígito de verificación se valida: si no corresponde al NIT, responde `409`.
 
-**2. Registra un adquirente y un producto**, y guarda los `id` que devuelven:
+**2. Registra el rango de numeración autorizado** (una sola vez):
+
+```bash
+curl -X POST $API/rangos-numeracion -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
+  "prefijo": "SETP",
+  "tipoDocumento": "FACTURA",
+  "numeroInicial": 1,
+  "numeroFinal": 5000,
+  "vigenteDesde": "2026-01-01",
+  "vigenteHasta": "2027-01-01",
+  "numeroAutorizacion": "18760000001",
+  "claveTecnica": "fc8eac422eba16e22ffd8c6f94b3f40a6e38162c"
+}'
+```
+
+Sin un rango vigente no se emite nada: la factura del paso 4 respondería `409` con
+código `RANGO_NO_DISPONIBLE`. Es la resolución de la DIAN la que autoriza los números,
+no el sistema.
+
+La clave técnica entra y no vuelve a salir: no aparece en esta respuesta ni en ninguna
+consulta. `GET /rangos-numeracion` informa cuántos números quedan y cuántos días
+faltan para el vencimiento.
+
+**3. Registra un adquirente y un producto**, y guarda los `id` que devuelven:
 
 ```bash
 curl -X POST $API/adquirentes -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
@@ -106,7 +129,7 @@ curl -X POST $API/productos -H "X-Api-Key: $LLAVE" -H "Content-Type: application
 }'
 ```
 
-**3. Emite la factura** referenciando ambos:
+**4. Emite la factura** referenciando ambos:
 
 ```bash
 curl -X POST $API/facturas -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
@@ -116,9 +139,9 @@ curl -X POST $API/facturas -H "X-Api-Key: $LLAVE" -H "Content-Type: application/
 }'
 ```
 
-Responde `202` con `totalAPagar: 357000`. La descripción, la unidad, el precio y el IVA se copiaron del catálogo.
+Responde `202` con `totalAPagar: 357000` y el número `SETP-1`, tomado del rango. La descripción, la unidad, el precio y el IVA se copiaron del catálogo.
 
-**4. Compruébalo.** Cambia el precio del producto a 180.000 con un `PUT /productos/{id}`, y vuelve a consultar la factura:
+**5. Compruébalo.** Cambia el precio del producto a 180.000 con un `PUT /productos/{id}`, y vuelve a consultar la factura:
 
 ```bash
 curl $API/documentos/<id> -H "X-Api-Key: $LLAVE"
@@ -126,7 +149,7 @@ curl $API/documentos/<id> -H "X-Api-Key: $LLAVE"
 
 Sigue diciendo 150.000 y 357.000. Una factura emitida es una fotografía de un acuerdo, no una consulta viva.
 
-Reenviar la petición del paso 3 con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
+Reenviar la petición del paso 4 con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
 
 Para detener: `docker compose down`
 
@@ -193,7 +216,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | H0 | Esqueleto ejecutable, CI, docker-compose | Completo |
 | H1 | Emitir y consultar una factura de punta a punta | Completo |
 | H2 | Emisor, adquirentes y productos | Completo |
-| H3 | Numeración correcta bajo concurrencia | Pendiente |
+| H3 | Numeración correcta bajo concurrencia | Completo |
 | H4 | Notas crédito y débito, máquina de estados | Pendiente |
 | H5 | Generación del XML en UBL 2.1 | Pendiente |
 | H6 | Firma digital | Pendiente |

@@ -23,6 +23,30 @@ El bloqueo recae sobre una sola fila y dura lo que toma incrementar un contador.
 | Concurrencia optimista con reintento | Evita el bloqueo, pero bajo contención produce reintentos frecuentes. Para un contador de acceso puntual, el bloqueo es más simple y más predecible. |
 | Restricción de unicidad y manejo del error | La base de datos impediría el duplicado, pero el integrador recibiría un error por algo que el sistema debía resolver. Se mantiene la restricción como red de seguridad, no como mecanismo principal. |
 
+## Verificación
+
+La prueba `NumeracionConcurrenteTests.Emitir_en_paralelo_no_repite_ni_salta_consecutivos`
+emite 25 facturas simultáneas contra PostgreSQL real y comprueba que los consecutivos
+entregados no se repiten y forman un tramo continuo.
+
+Una prueba de concurrencia puede pasar sin probar nada: basta con que las peticiones
+se separen lo suficiente para no llegar a competir. Para descartarlo se retiró el
+`FOR UPDATE` de `RepositorioRangos` y se volvió a ejecutar: la prueba falló con
+`500`, que es la restricción de unicidad rechazando el consecutivo duplicado. Con el
+bloqueo restaurado, vuelve a pasar.
+
+Ese resultado precisa además el reparto de responsabilidades entre los dos mecanismos:
+
+- La **restricción de unicidad** sobre `(prefijo, consecutivo)` protege la integridad.
+  Sin el bloqueo, la base de datos nunca habría guardado dos facturas con el mismo
+  número; habría rechazado la segunda.
+- El **bloqueo** protege la disponibilidad. Sin él, 24 de cada 25 integradores reciben
+  un error interno por una petición correcta.
+
+El bloqueo no se añade porque la restricción sea insuficiente para los datos, sino
+porque delegar en ella convierte una carrera previsible en un error para quien
+consume la API.
+
 ## Consecuencias
 
 **Positivas**

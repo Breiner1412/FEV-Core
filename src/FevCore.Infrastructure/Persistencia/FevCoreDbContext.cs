@@ -2,6 +2,7 @@ using FevCore.Domain.Adquirentes;
 using FevCore.Domain.Documentos;
 using FevCore.Domain.Emisores;
 using FevCore.Domain.Integradores;
+using FevCore.Domain.Numeracion;
 using FevCore.Domain.Productos;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,6 +23,7 @@ public sealed class FevCoreDbContext(DbContextOptions<FevCoreDbContext> opciones
     public DbSet<Emisor> Emisores => Set<Emisor>();
     public DbSet<Adquirente> Adquirentes => Set<Adquirente>();
     public DbSet<Producto> Productos => Set<Producto>();
+    public DbSet<RangoNumeracion> RangosNumeracion => Set<RangoNumeracion>();
 
     protected override void OnModelCreating(ModelBuilder constructor)
     {
