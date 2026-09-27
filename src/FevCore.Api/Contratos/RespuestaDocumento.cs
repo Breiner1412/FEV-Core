@@ -20,6 +20,16 @@ public sealed record RespuestaDocumento
     public required string NumeroCompleto { get; init; }
     public required DateTimeOffset FechaEmision { get; init; }
     public required string Moneda { get; init; }
+
+    /// <summary>Identificador del adquirente en el catalogo.</summary>
+    public required Guid AdquirenteId { get; init; }
+
+    /// <summary>Datos del emisor tal como estaban al emitir (RN-10).</summary>
+    public required RespuestaDatosTributarios Emisor { get; init; }
+
+    /// <summary>Datos del adquirente tal como estaban al emitir (RN-10).</summary>
+    public required RespuestaDatosTributarios Adquirente { get; init; }
+
     public required IReadOnlyList<RespuestaLinea> Lineas { get; init; }
     public required RespuestaTotales Totales { get; init; }
 
@@ -37,6 +47,9 @@ public sealed record RespuestaDocumento
         NumeroCompleto = documento.NumeroCompleto,
         FechaEmision = documento.FechaEmision,
         Moneda = documento.Moneda,
+        AdquirenteId = documento.AdquirenteId,
+        Emisor = RespuestaDatosTributarios.Desde(documento.EmisorSnapshot),
+        Adquirente = RespuestaDatosTributarios.Desde(documento.AdquirenteSnapshot),
         Lineas = [.. documento.Lineas.Select(RespuestaLinea.Desde)],
         Totales = RespuestaTotales.Desde(documento.Totales),
         CodigoUnico = null

@@ -1,30 +1,34 @@
-using FevCore.Domain.Documentos;
-
 namespace FevCore.Application.Documentos;
 
 /// <summary>
 /// Lo que se necesita para emitir una factura.
 ///
-/// Es un tipo de la capa de aplicacion, no de la API: describe la intencion
-/// en terminos del negocio, sin saber que llego por HTTP ni en que formato.
+/// Desde H2 las lineas ya no traen sus datos en crudo: traen el producto
+/// del catalogo. El resto se copia de alli al emitir (RN-10).
 /// </summary>
 public sealed record ComandoEmitirFactura(
     Guid IntegradorId,
     string ReferenciaExterna,
+    Guid AdquirenteId,
     DateTimeOffset? FechaEmision,
     IReadOnlyList<LineaComando> Lineas);
 
+/// <summary>
+/// Una linea solicitada.
+/// </summary>
+/// <param name="ProductoId">Producto del catalogo. Obligatorio.</param>
+/// <param name="Cantidad">Cuanto se vende.</param>
+/// <param name="PrecioUnitario">
+/// Si se omite, se usa el precio vigente del producto. Se permite
+/// sobrescribirlo porque un precio se negocia; lo que no se permite es
+/// inventar un producto que no existe.
+/// </param>
+/// <param name="Descuento">Descuento sobre el valor bruto de la linea.</param>
 public sealed record LineaComando(
-    string Codigo,
-    string Descripcion,
-    string UnidadMedida,
+    Guid ProductoId,
     decimal Cantidad,
-    decimal PrecioUnitario,
-    decimal? Descuento = null,
-    IReadOnlyList<ImpuestoComando>? Impuestos = null,
-    Guid? ProductoId = null);
-
-public sealed record ImpuestoComando(TipoImpuesto Tipo, decimal Tarifa);
+    decimal? PrecioUnitario = null,
+    decimal? Descuento = null);
 
 /// <summary>
 /// Resultado de una emision.

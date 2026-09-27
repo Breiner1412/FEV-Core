@@ -24,8 +24,9 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
     /// <summary>Llave de API con la que se autentican las pruebas.</summary>
     public const string LlaveDePrueba = "fev_llave_para_pruebas_de_integracion";
 
-    private readonly PostgreSqlContainer _contenedor = new PostgreSqlBuilder()
-        .WithImage("postgres:18-alpine")
+    // La imagen va en el constructor: el constructor sin parametros quedo
+    // obsoleto en Testcontainers.
+    private readonly PostgreSqlContainer _contenedor = new PostgreSqlBuilder("postgres:18-alpine")
         .WithDatabase("fevcore_pruebas")
         .WithUsername("pruebas")
         .WithPassword("pruebas")

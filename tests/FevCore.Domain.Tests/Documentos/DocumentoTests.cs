@@ -6,6 +6,25 @@ namespace FevCore.Domain.Tests.Documentos;
 public sealed class DocumentoTests
 {
     private static readonly Guid Integrador = Guid.CreateVersion7();
+    private static readonly Guid AdquirenteId = Guid.CreateVersion7();
+
+    private static DatosTributarios DatosEmisor() => DatosTributarios.Crear(
+        tipoIdentificacion: DatosTributarios.TipoNit,
+        identificacion: "800197268",
+        razonSocial: "Comercializadora del Eje SAS",
+        direccion: "Calle 20 # 8-45",
+        municipioCodigo: "66001",
+        regimen: "48",
+        digitoVerificacion: "4",
+        responsabilidades: ["O-13"]);
+
+    private static DatosTributarios DatosAdquirente() => DatosTributarios.Crear(
+        tipoIdentificacion: "13",
+        identificacion: "1088123456",
+        razonSocial: "Juan Perez",
+        direccion: "Carrera 10 # 5-20",
+        municipioCodigo: "66001",
+        regimen: "49");
 
     private static Linea CrearLinea(
         int numero = 1,
@@ -30,6 +49,9 @@ public sealed class DocumentoTests
             prefijo: "SETP",
             consecutivo: 990_000_123,
             fechaEmision: new DateTimeOffset(2026, 9, 25, 14, 30, 0, TimeSpan.FromHours(-5)),
+            adquirenteId: AdquirenteId,
+            emisorSnapshot: DatosEmisor(),
+            adquirenteSnapshot: DatosAdquirente(),
             lineas: lineas);
 
     // ── Emision basica ──
@@ -102,6 +124,9 @@ public sealed class DocumentoTests
             prefijo: "SETP",
             consecutivo: 1,
             fechaEmision: DateTimeOffset.UtcNow,
+            adquirenteId: AdquirenteId,
+            emisorSnapshot: DatosEmisor(),
+            adquirenteSnapshot: DatosAdquirente(),
             lineas: [CrearLinea()]));
 
         Assert.Equal("REFERENCIA_EXTERNA_REQUERIDA", error.Codigo);
@@ -118,9 +143,41 @@ public sealed class DocumentoTests
             prefijo: "SETP",
             consecutivo: 1,
             fechaEmision: DateTimeOffset.UtcNow,
+            adquirenteId: AdquirenteId,
+            emisorSnapshot: DatosEmisor(),
+            adquirenteSnapshot: DatosAdquirente(),
             lineas: [CrearLinea()]));
 
         Assert.Equal("INTEGRADOR_REQUERIDO", error.Codigo);
+    }
+
+    // ── RN-10: el documento guarda COPIAS, no referencias ──
+
+    [Fact]
+    public void Guarda_una_copia_de_los_datos_de_ambas_partes()
+    {
+        var factura = EmitirCon(CrearLinea());
+
+        Assert.Equal("Comercializadora del Eje SAS", factura.EmisorSnapshot.RazonSocial);
+        Assert.Equal("Juan Perez", factura.AdquirenteSnapshot.RazonSocial);
+        Assert.Equal(AdquirenteId, factura.AdquirenteId);
+    }
+
+    [Fact]
+    public void Rechaza_una_factura_sin_adquirente()
+    {
+        var error = Assert.Throws<ExcepcionDominio>(() => Documento.EmitirFactura(
+            integradorId: Integrador,
+            referenciaExterna: "VTA-001",
+            prefijo: "SETP",
+            consecutivo: 1,
+            fechaEmision: DateTimeOffset.UtcNow,
+            adquirenteId: Guid.Empty,
+            emisorSnapshot: DatosEmisor(),
+            adquirenteSnapshot: DatosAdquirente(),
+            lineas: [CrearLinea()]));
+
+        Assert.Equal("ADQUIRENTE_REQUERIDO", error.Codigo);
     }
 
     // ── RN-09 e INV-DOC-02: los totales cuadran ──
@@ -209,6 +266,9 @@ public sealed class DocumentoTests
             prefijo: "SETP",
             consecutivo: 1,
             fechaEmision: DateTimeOffset.UtcNow,
+            adquirenteId: AdquirenteId,
+            emisorSnapshot: DatosEmisor(),
+            adquirenteSnapshot: DatosAdquirente(),
             lineas: [CrearLinea()],
             moneda: "cop");
 

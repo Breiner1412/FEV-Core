@@ -53,6 +53,21 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
             .HasMaxLength(3)
             .IsRequired();
 
+        documento.Property(d => d.AdquirenteId).IsRequired();
+
+        // ── Las dos copias de datos tributarios (RN-10) ──
+        // Cada una en sus propias columnas, prefijadas por EF con el nombre
+        // de su navegacion: EmisorSnapshot_RazonSocial, etc.
+        //
+        // Se guardan con el documento y no como referencia al catalogo: si
+        // el emisor o el adquirente cambian sus datos, este documento sigue
+        // declarando los que se firmaron.
+        documento.OwnsOne(d => d.EmisorSnapshot, ConfiguracionDatosTributarios.Configurar);
+        documento.Navigation(d => d.EmisorSnapshot).IsRequired();
+
+        documento.OwnsOne(d => d.AdquirenteSnapshot, ConfiguracionDatosTributarios.Configurar);
+        documento.Navigation(d => d.AdquirenteSnapshot).IsRequired();
+
         // NumeroCompleto se calcula desde prefijo y consecutivo. No se guarda.
         documento.Ignore(d => d.NumeroCompleto);
 

@@ -1,5 +1,8 @@
+using FevCore.Domain.Adquirentes;
 using FevCore.Domain.Documentos;
+using FevCore.Domain.Emisores;
 using FevCore.Domain.Integradores;
+using FevCore.Domain.Productos;
 using Microsoft.EntityFrameworkCore;
 
 namespace FevCore.Infrastructure.Persistencia;
@@ -16,6 +19,9 @@ public sealed class FevCoreDbContext(DbContextOptions<FevCoreDbContext> opciones
 {
     public DbSet<Documento> Documentos => Set<Documento>();
     public DbSet<Integrador> Integradores => Set<Integrador>();
+    public DbSet<Emisor> Emisores => Set<Emisor>();
+    public DbSet<Adquirente> Adquirentes => Set<Adquirente>();
+    public DbSet<Producto> Productos => Set<Producto>();
 
     protected override void OnModelCreating(ModelBuilder constructor)
     {
