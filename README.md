@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 1 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 2 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -57,31 +57,76 @@ En desarrollo se crea un integrador con una llave conocida, que aparece en los r
 docker compose logs api | grep "Llave de API"
 ```
 
-```bash
-curl -X POST http://localhost:8080/api/v1/facturas \
-  -H "X-Api-Key: fev_desarrollo_no_usar_en_produccion" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "referenciaExterna": "VTA-001",
-    "lineas": [{
-      "codigo": "PROD-001",
-      "descripcion": "Teclado mecanico",
-      "unidadMedida": "94",
-      "cantidad": 2,
-      "precioUnitario": 150000,
-      "impuestos": [{ "tipo": "IVA", "tarifa": 19 }]
-    }]
-  }'
-```
-
-Responde `202` con el documento y `totalAPagar: 357000`. Guarda el `id` y consúltalo:
+Guarda la llave en una variable para no repetirla:
 
 ```bash
-curl http://localhost:8080/api/v1/documentos/{id} \
-  -H "X-Api-Key: fev_desarrollo_no_usar_en_produccion"
+LLAVE="fev_desarrollo_no_usar_en_produccion"
+API="http://localhost:8080/api/v1"
 ```
 
-Reenviar la primera petición con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
+**1. Configura el emisor** (una sola vez):
+
+```bash
+curl -X PUT $API/emisor -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
+  "datos": {
+    "tipoIdentificacion": "31",
+    "identificacion": "800197268",
+    "digitoVerificacion": "4",
+    "razonSocial": "Comercializadora del Eje SAS",
+    "direccion": "Calle 20 # 8-45",
+    "municipioCodigo": "66001",
+    "regimen": "48",
+    "responsabilidades": ["O-13"]
+  }
+}'
+```
+
+El dígito de verificación se valida: si no corresponde al NIT, responde `409`.
+
+**2. Registra un adquirente y un producto**, y guarda los `id` que devuelven:
+
+```bash
+curl -X POST $API/adquirentes -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
+  "datos": {
+    "tipoIdentificacion": "13",
+    "identificacion": "1088123456",
+    "razonSocial": "Juan Perez",
+    "direccion": "Carrera 10 # 5-20",
+    "municipioCodigo": "66001",
+    "regimen": "49"
+  }
+}'
+
+curl -X POST $API/productos -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
+  "codigo": "PROD-001",
+  "descripcion": "Teclado mecanico",
+  "unidadMedida": "94",
+  "precioUnitario": 150000,
+  "impuestos": [{ "tipo": "IVA", "tarifa": 19 }]
+}'
+```
+
+**3. Emite la factura** referenciando ambos:
+
+```bash
+curl -X POST $API/facturas -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
+  "referenciaExterna": "VTA-001",
+  "adquirenteId": "<id del adquirente>",
+  "lineas": [{ "productoId": "<id del producto>", "cantidad": 2 }]
+}'
+```
+
+Responde `202` con `totalAPagar: 357000`. La descripción, la unidad, el precio y el IVA se copiaron del catálogo.
+
+**4. Compruébalo.** Cambia el precio del producto a 180.000 con un `PUT /productos/{id}`, y vuelve a consultar la factura:
+
+```bash
+curl $API/documentos/<id> -H "X-Api-Key: $LLAVE"
+```
+
+Sigue diciendo 150.000 y 357.000. Una factura emitida es una fotografía de un acuerdo, no una consulta viva.
+
+Reenviar la petición del paso 3 con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
 
 Para detener: `docker compose down`
 
@@ -147,7 +192,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 |---|---|---|
 | H0 | Esqueleto ejecutable, CI, docker-compose | Completo |
 | H1 | Emitir y consultar una factura de punta a punta | Completo |
-| H2 | Emisor, adquirentes y productos | Pendiente |
+| H2 | Emisor, adquirentes y productos | Completo |
 | H3 | Numeración correcta bajo concurrencia | Pendiente |
 | H4 | Notas crédito y débito, máquina de estados | Pendiente |
 | H5 | Generación del XML en UBL 2.1 | Pendiente |
