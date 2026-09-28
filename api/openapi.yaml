@@ -992,10 +992,15 @@ components:
           type: string
           format: uuid
           nullable: true
-        motivoReferencia:
+        motivo:
           allOf:
             - $ref: '#/components/schemas/MotivoNota'
           nullable: true
+          description: Por qué se emitió la nota. Nulo en facturas.
+        observaciones:
+          type: string
+          nullable: true
+          maxLength: 500
         codigoUnico:
           type: string
           nullable: true
@@ -1119,6 +1124,12 @@ components:
     TransicionEstado:
       type: object
       properties:
+        secuencia:
+          type: integer
+          description: |
+            Posición en el historial, empezando en 1. El historial se ordena por
+            este campo y no por `ocurridaEn`: dos transiciones pueden compartir
+            marca de tiempo.
         estadoAnterior:
           allOf:
             - $ref: '#/components/schemas/EstadoDocumento'
