@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 3 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 4 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -151,6 +151,45 @@ Sigue diciendo 150.000 y 357.000. Una factura emitida es una fotografía de un a
 
 Reenviar la petición del paso 4 con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
 
+**6. Emite una nota crédito.** Una nota solo corrige una factura **aprobada**
+(RN-03), y la transmisión real llega en H7, así que fuera de producción hay un
+endpoint que recorre la máquina de estados a mano:
+
+```bash
+DOC=<pega aqui el id de la factura>
+
+for ESTADO in EN_PROCESO TRANSMITIDO APROBADO; do
+  curl -X POST $API/desarrollo/documentos/$DOC/estado     -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json"     -d "{\"estado\": \"$ESTADO\", \"motivo\": \"Avance manual\"}"
+done
+
+curl -X POST $API/notas-credito -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json" -d '{
+  "referenciaExterna": "NC-001",
+  "documentoReferenciadoId": "'"$DOC"'",
+  "motivo": "DEVOLUCION_PARCIAL",
+  "lineas": [{ "productoId": "<id del producto>", "cantidad": 1 }]
+}'
+```
+
+Responde `202` con prefijo `NCA`: la nota usa su propio rango de numeración, no
+el de facturas. No lleva adquirente porque lo hereda de la factura.
+
+Emitir una segunda nota por más de lo que queda responde `409` con código
+`NOTA_EXCEDE_VALOR_FACTURA` (RN-04). Referenciar una nota en lugar de una
+factura responde `409 DOCUMENTO_REFERENCIADO_INVALIDO` (RN-05).
+
+> El endpoint `/desarrollo/...` se registra solo en los entornos `Development` y
+> `Testing`, mediante lista blanca. No aparece en `api/openapi.yaml`: el contrato
+> describe lo que un integrador puede usar, y esto no lo es.
+
+**7. Mira el historial** (RF-23):
+
+```bash
+curl $API/documentos/$DOC/historial -H "X-Api-Key: $LLAVE"
+```
+
+Devuelve las cuatro transiciones, empezando por el nacimiento del documento, que
+tiene `estadoAnterior` nulo. Cada una dice cuándo ocurrió y por qué.
+
 Para detener: `docker compose down`
 
 ### Para desarrollar
@@ -206,6 +245,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 - **[Emisión asíncrona](docs/adr/0005-emision-asincrona.md)** — por qué la API no espera a la DIAN, y qué problema resuelve eso.
 - **[Bandeja de salida](docs/adr/0006-bandeja-de-salida.md)** — cómo se garantiza que ningún documento quede sin procesar aunque el proceso muera.
 - **[Bloqueo en la numeración](docs/adr/0009-bloqueo-numeracion.md)** — por qué una secuencia de base de datos no sirve para numeración fiscal.
+- **[Orden de bloqueos](docs/adr/0010-orden-de-bloqueos.md)** — cómo se evita un interbloqueo por diseño, y por qué aquí el bloqueo no protege la experiencia sino la verdad del dato.
 
 ---
 
@@ -217,7 +257,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | H1 | Emitir y consultar una factura de punta a punta | Completo |
 | H2 | Emisor, adquirentes y productos | Completo |
 | H3 | Numeración correcta bajo concurrencia | Completo |
-| H4 | Notas crédito y débito, máquina de estados | Pendiente |
+| H4 | Notas crédito y débito, máquina de estados | Completo |
 | H5 | Generación del XML en UBL 2.1 | Pendiente |
 | H6 | Firma digital | Pendiente |
 | H7 | Simulador y transmisión asíncrona | Pendiente |

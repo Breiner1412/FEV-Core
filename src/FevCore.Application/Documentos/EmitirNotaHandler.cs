@@ -1,0 +1,133 @@
+using FevCore.Application.Abstracciones;
+using FevCore.Domain.Comun;
+using FevCore.Domain.Documentos;
+
+namespace FevCore.Application.Documentos;
+
+public sealed record ComandoEmitirNota(
+    TipoDocumento Tipo,
+    Guid IntegradorId,
+    string ReferenciaExterna,
+    Guid DocumentoReferenciadoId,
+    MotivoNota Motivo,
+    string? Observaciones,
+    DateTimeOffset? FechaEmision,
+    IReadOnlyList<LineaComando> Lineas);
+
+/// <summary>
+/// Caso de uso: emitir una nota credito o debito contra una factura (RF-12, RF-13).
+///
+/// Las lineas se resuelven contra el catalogo igual que en una factura, y se
+/// copian igual (RN-10). La diferencia esta en lo que hay que comprobar antes:
+/// que la factura exista, sea factura, este aprobada, y que el acumulado de
+/// notas credito no la supere.
+/// </summary>
+public sealed class EmitirNotaHandler(
+    IRepositorioDocumentos repositorio,
+    IRepositorioEmisor repositorioEmisor,
+    IRepositorioAdquirentes repositorioAdquirentes,
+    IRepositorioProductos repositorioProductos,
+    IRepositorioRangos repositorioRangos,
+    IUnidadDeTrabajo unidadDeTrabajo,
+    TimeProvider reloj)
+{
+    public async Task<ResultadoEmision> EjecutarAsync(
+        ComandoEmitirNota comando,
+        CancellationToken cancelacion = default)
+    {
+        // ── 1. RF-15: si esta peticion ya llego, devolver lo mismo ──
+        var existente = await repositorio.BuscarPorReferenciaExternaAsync(
+            comando.IntegradorId, comando.ReferenciaExterna, cancelacion);
+
+        if (existente is not null)
+        {
+            return new ResultadoEmision(existente, YaExistia: true);
+        }
+
+        var emisor = await repositorioEmisor.ObtenerAsync(cancelacion)
+            ?? throw new ExcepcionDominio(
+                "EMISOR_INCOMPLETO",
+                "El emisor no ha sido configurado. Configurelo en PUT /api/v1/emisor " +
+                "antes de emitir documentos.");
+
+        var productos = await repositorioProductos.ObtenerPorIdsAsync(
+            comando.Lineas.Select(l => l.ProductoId), cancelacion);
+
+        var lineas = ConstructorLineas.Construir(comando.Lineas, productos);
+        var fechaEmision = comando.FechaEmision ?? reloj.GetUtcNow();
+
+        // ── 2. Dos candados, siempre en este orden ──
+        //
+        // Primero la factura, despues el rango. El orden importa: si un caso
+        // de uso tomara el rango antes que la factura y otro al reves, dos
+        // transacciones simultaneas podrian quedarse esperando la una a la
+        // otra para siempre. Eso es un interbloqueo, y se evita con una
+        // regla sencilla: todos los caminos toman los candados en el mismo
+        // orden. La emision de factura solo toma el rango, asi que no rompe
+        // la regla.
+        await using var transaccion =
+            await unidadDeTrabajo.IniciarTransaccionAsync(cancelacion);
+
+        var factura = await repositorio.TomarParaActualizarAsync(
+            comando.DocumentoReferenciadoId, cancelacion)
+            ?? throw new ExcepcionDominio(
+                "DOCUMENTO_REFERENCIADO_NO_ENCONTRADO",
+                $"No existe un documento con el identificador " +
+                $"{comando.DocumentoReferenciadoId}.");
+
+        // El adquirente se resuelve por el de la FACTURA, no por uno que
+        // mande el cliente: una nota corrige una venta concreta, a su mismo
+        // comprador.
+        //
+        // No se comprueba que siga activo: desactivar un adquirente impide
+        // venderle de nuevo, no corregir lo que ya se le vendio.
+        var adquirente = await repositorioAdquirentes.ObtenerPorIdAsync(
+            factura.AdquirenteId, cancelacion)
+            ?? throw new ExcepcionDominio(
+                "ADQUIRENTE_NO_ENCONTRADO",
+                $"La factura {factura.NumeroCompleto} referencia un adquirente " +
+                "que ya no existe en el catalogo.");
+
+        // RN-04: cuanto se lleva acreditado de esta factura. Es la unica
+        // cifra que el dominio no puede averiguar solo, por eso se calcula
+        // aqui y se le entrega.
+        var notasPrevias = comando.Tipo == TipoDocumento.NotaCredito
+            ? await repositorio.SumarNotasCreditoAsync(factura.Id, cancelacion)
+            : Dinero.Cero;
+
+        var rango = await repositorioRangos.TomarVigenteParaActualizarAsync(
+            comando.Tipo,
+            DateOnly.FromDateTime(fechaEmision.UtcDateTime),
+            cancelacion)
+            ?? throw new ExcepcionDominio(
+                "RANGO_NO_DISPONIBLE",
+                $"No hay un rango de numeracion vigente para {comando.Tipo} en esa " +
+                "fecha. Registrelo en POST /api/v1/rangos-numeracion.");
+
+        var consecutivo = rango.TomarSiguienteConsecutivo(
+            DateOnly.FromDateTime(fechaEmision.UtcDateTime));
+
+        // Aqui se verifican RN-03, RN-04 y RN-05, dentro del dominio.
+        var nota = Documento.EmitirNota(
+            tipo: comando.Tipo,
+            integradorId: comando.IntegradorId,
+            referenciaExterna: comando.ReferenciaExterna,
+            prefijo: rango.Prefijo,
+            consecutivo: consecutivo,
+            fechaEmision: fechaEmision,
+            facturaReferenciada: factura,
+            motivo: comando.Motivo,
+            observaciones: comando.Observaciones,
+            emisorSnapshot: emisor.Datos,
+            adquirenteSnapshot: adquirente.Datos,
+            lineas: lineas,
+            notasCreditoPrevias: notasPrevias);
+
+        await repositorio.AgregarAsync(nota, cancelacion);
+        await repositorio.GuardarCambiosAsync(cancelacion);
+
+        await transaccion.ConfirmarAsync(cancelacion);
+
+        return new ResultadoEmision(nota, YaExistia: false);
+    }
+}

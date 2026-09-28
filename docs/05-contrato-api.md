@@ -145,6 +145,10 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 | Código | Estado | Significado |
 |---|---|---|
 | `DOCUMENTO_REFERENCIADO_NO_ENCONTRADO` | 409 | La factura referenciada no existe. *(RN-03)* |
+| `TIPO_NOTA_INVALIDO` | 409 | Se pidió emitir como nota algo que no es nota crédito ni débito. |
+| `TRANSICION_INVALIDA` | 409 | El cambio de estado solicitado no está en la máquina de estados. *(INV-DOC-08)* |
+| `ESTADO_TERMINAL` | 409 | El documento ya terminó su ciclo y no admite más cambios. *(RN-11)* |
+| `TRANSICION_SIN_MOTIVO` | 409 | Se intentó registrar un cambio de estado sin decir por qué. *(RN-12)* |
 | `DOCUMENTO_REFERENCIADO_NO_APROBADO` | 409 | La factura referenciada existe pero no está aprobada. *(RN-03)* |
 | `DOCUMENTO_REFERENCIADO_INVALIDO` | 409 | Se intentó referenciar una nota en lugar de una factura. *(RN-05)* |
 | `NOTA_EXCEDE_VALOR_FACTURA` | 409 | El acumulado de notas crédito superaría el total de la factura. *(RN-04)* |

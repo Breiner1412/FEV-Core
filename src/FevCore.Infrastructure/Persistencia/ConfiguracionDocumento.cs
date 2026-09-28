@@ -55,6 +55,37 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
 
         documento.Property(d => d.AdquirenteId).IsRequired();
 
+        // ── Solo en notas (INV-DOC-03, INV-DOC-04) ──
+        // Nulables porque una factura no referencia nada. La obligatoriedad
+        // segun el tipo la impone el dominio, no la base: una restriccion
+        // CHECK duplicaria la regla en dos sitios que pueden divergir.
+        documento.Property(d => d.DocumentoReferenciadoId);
+
+        documento.Property(d => d.Motivo)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        documento.Property(d => d.Observaciones)
+            .HasMaxLength(500);
+
+        // Clave foranea a la propia tabla, sin navegacion en la entidad.
+        // El dominio no tiene una propiedad Documento apuntando a la factura
+        // a proposito: una nota no arrastra su factura entera cada vez que se
+        // carga. Pero la base si garantiza que ese identificador exista.
+        documento
+            .HasOne<Documento>()
+            .WithMany()
+            .HasForeignKey(d => d.DocumentoReferenciadoId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // RN-04 suma las notas credito de una factura en cada emision de
+        // nota. Sin este indice seria un recorrido de toda la tabla.
+        documento.HasIndex(d => d.DocumentoReferenciadoId)
+            .HasDatabaseName("ix_documentos_referenciado");
+
+        // EsNota se deduce del tipo. No se guarda.
+        documento.Ignore(d => d.EsNota);
+
         // ── Las dos copias de datos tributarios (RN-10) ──
         // Cada una en sus propias columnas, prefijadas por EF con el nombre
         // de su navegacion: EmisorSnapshot_RazonSocial, etc.
@@ -184,6 +215,52 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
         });
 
         documento.Navigation(d => d.Lineas)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // ── Historial de estados: pertenece al documento (RN-12, RF-23) ──
+        // Va dentro del agregado y no en una tabla suelta porque INV-TRA-02
+        // —que cada transicion empalme con la anterior— no se puede verificar
+        // sin ver el documento completo.
+        documento.OwnsMany(d => d.Transiciones, transicion =>
+        {
+            transicion.ToTable("transiciones_estado");
+            transicion.WithOwner().HasForeignKey("DocumentoId");
+
+            // ValueGeneratedNever porque, por convencion, Entity Framework
+            // trata un entero que forma parte de la clave como generado por
+            // la base. Aqui no: la secuencia la asigna el documento, y debe
+            // empezar en 1 para cada uno. Dejandolo a PostgreSQL seria un
+            // contador global y el historial de cada documento empezaria en
+            // un numero cualquiera.
+            transicion.Property(t => t.Secuencia)
+                .ValueGeneratedNever()
+                .IsRequired();
+
+            // La identidad natural: documento mas posicion en su historial.
+            // Sin esto, Entity Framework inventa una columna de identidad
+            // propia, que no significa nada y que nadie consulta jamas.
+            transicion.HasKey("DocumentoId", nameof(TransicionEstado.Secuencia));
+
+            transicion.Property(t => t.EstadoAnterior)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            transicion.Property(t => t.EstadoNuevo)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
+
+            transicion.Property(t => t.OcurridaEn).IsRequired();
+
+            transicion.Property(t => t.Motivo)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            transicion.Property(t => t.Detalle)
+                .HasMaxLength(500);
+        });
+
+        documento.Navigation(d => d.Transiciones)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

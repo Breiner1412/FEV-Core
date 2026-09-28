@@ -36,6 +36,14 @@ public sealed record RespuestaDocumento
     /// <summary>Nulo mientras el documento no este aprobado (RF-20).</summary>
     public string? CodigoUnico { get; init; }
 
+    // ── Solo en notas ──
+
+    /// <summary>Factura que esta nota corrige. Nulo en facturas.</summary>
+    public Guid? DocumentoReferenciadoId { get; init; }
+
+    public MotivoNota? Motivo { get; init; }
+    public string? Observaciones { get; init; }
+
     public static RespuestaDocumento Desde(Documento documento) => new()
     {
         Id = documento.Id,
@@ -52,7 +60,10 @@ public sealed record RespuestaDocumento
         Adquirente = RespuestaDatosTributarios.Desde(documento.AdquirenteSnapshot),
         Lineas = [.. documento.Lineas.Select(RespuestaLinea.Desde)],
         Totales = RespuestaTotales.Desde(documento.Totales),
-        CodigoUnico = null
+        CodigoUnico = null,
+        DocumentoReferenciadoId = documento.DocumentoReferenciadoId,
+        Motivo = documento.Motivo,
+        Observaciones = documento.Observaciones
     };
 }
 
