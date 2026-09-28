@@ -60,7 +60,7 @@ public sealed record RespuestaDocumento
         Adquirente = RespuestaDatosTributarios.Desde(documento.AdquirenteSnapshot),
         Lineas = [.. documento.Lineas.Select(RespuestaLinea.Desde)],
         Totales = RespuestaTotales.Desde(documento.Totales),
-        CodigoUnico = null,
+        CodigoUnico = documento.CodigoUnico,
         DocumentoReferenciadoId = documento.DocumentoReferenciadoId,
         Motivo = documento.Motivo,
         Observaciones = documento.Observaciones

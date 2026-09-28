@@ -6,7 +6,9 @@ using FevCore.Application.Abstracciones;
 using FevCore.Application.Catalogos;
 using FevCore.Application.Documentos;
 using FevCore.Application.Numeracion;
+using FevCore.Domain.Documentos;
 using FevCore.Infrastructure.Persistencia;
+using FevCore.Infrastructure.Xml;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +82,15 @@ builder.Services.AddScoped<EmitirFacturaHandler>();
 builder.Services.AddScoped<ConsultarDocumentoHandler>();
 builder.Services.AddScoped<EmitirNotaHandler>();
 builder.Services.AddScoped<TransicionarDocumentoHandler>();
+builder.Services.AddScoped<GenerarXmlHandler>();
+
+// El ambiente entra en el codigo unico, asi que un documento de pruebas y
+// uno de produccion con los mismos datos producen codigos distintos. Por
+// defecto Pruebas: equivocarse hacia produccion es el error caro.
+builder.Services.AddSingleton<IGeneradorXml>(_ => new GeneradorXmlUbl(
+    Enum.TryParse<AmbienteDian>(builder.Configuration["Dian:Ambiente"], out var ambiente)
+        ? ambiente
+        : AmbienteDian.Pruebas));
 builder.Services.AddScoped<GestionEmisor>();
 builder.Services.AddScoped<GestionAdquirentes>();
 builder.Services.AddScoped<GestionProductos>();

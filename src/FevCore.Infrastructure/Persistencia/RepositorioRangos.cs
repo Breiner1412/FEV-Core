@@ -49,6 +49,14 @@ public sealed class RepositorioRangos(FevCoreDbContext contexto) : IRepositorioR
         return encontrados.FirstOrDefault();
     }
 
+    public Task<RangoNumeracion?> BuscarPorPrefijoYTipoAsync(
+        string prefijo,
+        TipoDocumento tipoDocumento,
+        CancellationToken cancelacion = default) =>
+        contexto.RangosNumeracion.FirstOrDefaultAsync(
+            r => r.Prefijo == prefijo && r.TipoDocumento == tipoDocumento,
+            cancelacion);
+
     public Task<RangoNumeracion?> ObtenerPorIdAsync(
         Guid id,
         CancellationToken cancelacion = default) =>

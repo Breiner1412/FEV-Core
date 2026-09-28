@@ -86,6 +86,17 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
         // EsNota se deduce del tipo. No se guarda.
         documento.Ignore(d => d.EsNota);
 
+        // ── Resultado de la generacion del XML (H5) ──
+
+        documento.Property(d => d.CodigoUnico)
+            .HasMaxLength(96);
+
+        // text y no varchar(n): un XML con muchas lineas no tiene un tamano
+        // maximo razonable que se pueda fijar de antemano. En PostgreSQL,
+        // text no es mas lento que varchar.
+        documento.Property(d => d.Xml)
+            .HasColumnType("text");
+
         // ── Las dos copias de datos tributarios (RN-10) ──
         // Cada una en sus propias columnas, prefijadas por EF con el nombre
         // de su navegacion: EmisorSnapshot_RazonSocial, etc.

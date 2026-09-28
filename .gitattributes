@@ -30,3 +30,14 @@ Dockerfile  text eol=lf
 *.pfx       binary
 *.p12       binary
 *.snk       binary
+
+# Los esquemas de UBL 2.1 son la distribucion oficial de OASIS, sin
+# modificar. Marcarlos como dependencia externa los excluye de las
+# estadisticas de lenguaje de GitHub y de los diff por defecto: son 82.000
+# lineas que nadie escribio aqui y que nadie va a revisar.
+#
+# Se versionan enteros en vez de recortados a los tres documentos que usamos
+# para que su procedencia sea verificable: cualquiera puede comparar la
+# carpeta con el paquete de OASIS y comprobar que no se toco nada.
+schemas/** linguist-vendored
+schemas/** linguist-generated=true

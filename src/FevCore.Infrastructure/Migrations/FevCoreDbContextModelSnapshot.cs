@@ -51,6 +51,10 @@ namespace FevCore.Infrastructure.Migrations
                     b.Property<Guid>("AdquirenteId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CodigoUnico")
+                        .HasMaxLength(96)
+                        .HasColumnType("character varying(96)");
+
                     b.Property<long>("Consecutivo")
                         .HasColumnType("bigint");
 
@@ -95,6 +99,9 @@ namespace FevCore.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 

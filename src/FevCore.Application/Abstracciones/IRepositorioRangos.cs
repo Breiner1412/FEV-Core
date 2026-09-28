@@ -21,6 +21,15 @@ public interface IRepositorioRangos
         DateOnly fecha,
         CancellationToken cancelacion = default);
 
+    /// <summary>
+    /// El rango de un prefijo y tipo concretos. Se usa al generar el XML,
+    /// que necesita la clave tecnica del rango que numero el documento.
+    /// </summary>
+    Task<RangoNumeracion?> BuscarPorPrefijoYTipoAsync(
+        string prefijo,
+        TipoDocumento tipoDocumento,
+        CancellationToken cancelacion = default);
+
     Task<RangoNumeracion?> ObtenerPorIdAsync(
         Guid id,
         CancellationToken cancelacion = default);
