@@ -13,6 +13,9 @@ internal static class AyudantesPruebas
 {
     public const string RutaFacturas = "/api/v1/facturas";
     public const string RutaRangos = "/api/v1/rangos-numeracion";
+    public const string RutaNotasCredito = "/api/v1/notas-credito";
+    public const string RutaNotasDebito = "/api/v1/notas-debito";
+    public const string RutaDocumentos = "/api/v1/documentos";
 
     public static string Referencia() => $"VTA-{Guid.NewGuid():N}"[..20];
 
@@ -119,21 +122,104 @@ internal static class AyudantesPruebas
     /// no pueden regir al mismo tiempo (INV-RAN-03): un segundo POST
     /// responderia 409.
     /// </summary>
-    public static async Task AsegurarRangoFacturas(HttpClient cliente)
+    public static async Task AsegurarRango(
+        HttpClient cliente,
+        string tipoDocumento,
+        string prefijo)
     {
         var existentes = await LeerJson(await cliente.GetAsync(RutaRangos));
 
         foreach (var rango in existentes.EnumerateArray())
         {
-            if (rango.GetProperty("tipoDocumento").GetString() == "FACTURA")
+            if (rango.GetProperty("tipoDocumento").GetString() == tipoDocumento)
             {
                 return;
             }
         }
 
-        var respuesta = await cliente.PostAsJsonAsync(RutaRangos, SolicitudRango());
+        var respuesta = await cliente.PostAsJsonAsync(
+            RutaRangos, SolicitudRango(tipoDocumento, prefijo));
+
         respuesta.EnsureSuccessStatusCode();
     }
+
+    public static Task AsegurarRangoFacturas(HttpClient cliente) =>
+        AsegurarRango(cliente, "FACTURA", "SETP");
+
+    /// <summary>Rangos para los tres tipos de documento.</summary>
+    public static async Task AsegurarTodosLosRangos(HttpClient cliente)
+    {
+        await AsegurarRango(cliente, "FACTURA", "SETP");
+        await AsegurarRango(cliente, "NOTA_CREDITO", "NCA");
+        await AsegurarRango(cliente, "NOTA_DEBITO", "NDA");
+    }
+
+    /// <summary>
+    /// Lleva un documento a un estado usando el endpoint de desarrollo.
+    ///
+    /// Ese endpoint solo se registra fuera de produccion. Si algun dia
+    /// alguien lo expusiera de mas, estas pruebas seguirian pasando: quien
+    /// lo vigila es AutenticacionTests, no estas.
+    /// </summary>
+    public static async Task ForzarEstado(
+        HttpClient cliente,
+        Guid documentoId,
+        string estado,
+        string motivo)
+    {
+        var respuesta = await cliente.PostAsJsonAsync(
+            $"/api/v1/desarrollo/documentos/{documentoId}/estado",
+            new { estado, motivo });
+
+        respuesta.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    /// Recorre la maquina de estados hasta Aprobado. No hay atajo: cada
+    /// salto es una transicion valida de la seccion 6.2.
+    /// </summary>
+    public static async Task Aprobar(HttpClient cliente, Guid documentoId)
+    {
+        await ForzarEstado(cliente, documentoId, "EN_PROCESO", "Generando XML.");
+        await ForzarEstado(cliente, documentoId, "TRANSMITIDO", "Enviado al validador.");
+        await ForzarEstado(cliente, documentoId, "APROBADO", "Validado por la autoridad.");
+    }
+
+    /// <summary>Emite una factura y la deja aprobada. Devuelve su id y su total.</summary>
+    public static async Task<(Guid Id, decimal Total)> FacturaAprobada(
+        HttpClient cliente,
+        Guid adquirenteId,
+        Guid productoId,
+        decimal cantidad = 2m)
+    {
+        var respuesta = await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirenteId, [(productoId, cantidad, null, null)]));
+
+        respuesta.EnsureSuccessStatusCode();
+
+        var json = await LeerJson(respuesta);
+        var id = json.GetProperty("id").GetGuid();
+        var total = json.GetProperty("totales").GetProperty("totalAPagar").GetDecimal();
+
+        await Aprobar(cliente, id);
+
+        return (id, total);
+    }
+
+    public static object SolicitudNota(
+        Guid facturaId,
+        Guid productoId,
+        decimal cantidad,
+        string referencia,
+        string motivo = "DEVOLUCION_PARCIAL") =>
+        new
+        {
+            referenciaExterna = referencia,
+            documentoReferenciadoId = facturaId,
+            motivo,
+            lineas = new[] { new { productoId, cantidad } }
+        };
 
     public static object SolicitudFactura(
         string referencia,

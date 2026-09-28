@@ -55,7 +55,20 @@ builder.Services.AddDbContext<FevCoreDbContext>(opciones =>
             "Falta la cadena de conexion. Definala en la variable de entorno " +
             "ConnectionStrings__Principal. Ver .env.example.");
 
-    opciones.UseNpgsql(cadena);
+    // SplitQuery en lugar de una sola consulta con JOIN.
+    //
+    // El agregado Documento tiene tres colecciones anidadas: lineas, los
+    // impuestos de cada linea y el historial de estados. Con un solo JOIN,
+    // la base devuelve el producto de las tres: una factura de 10 lineas con
+    // 2 impuestos cada una y 4 transiciones produce 80 filas para traer 16
+    // registros, y los datos del documento se repiten en las 80.
+    //
+    // Con SplitQuery EF hace una consulta por coleccion. Son mas viajes a la
+    // base, pero sin multiplicacion. Entity Framework venia avisando de esto
+    // desde H1 (warning 20504); con la tercera coleccion deja de ser teorico.
+    opciones.UseNpgsql(
+        cadena,
+        npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 });
 
 builder.Services.AddScoped<IRepositorioIntegradores, RepositorioIntegradores>();
@@ -68,6 +81,8 @@ builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 
 builder.Services.AddScoped<EmitirFacturaHandler>();
 builder.Services.AddScoped<ConsultarDocumentoHandler>();
+builder.Services.AddScoped<EmitirNotaHandler>();
+builder.Services.AddScoped<TransicionarDocumentoHandler>();
 builder.Services.AddScoped<GestionEmisor>();
 builder.Services.AddScoped<GestionAdquirentes>();
 builder.Services.AddScoped<GestionProductos>();
@@ -132,6 +147,10 @@ if (!app.Environment.IsEnvironment("Testing"))
 }
 
 app.MapControllers();
+
+// Endpoints que no existen en produccion. La clase decide sola si se
+// registra, segun el entorno.
+EndpointsDesarrollo.Mapear(app);
 
 await app.RunAsync();
 
