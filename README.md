@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 4 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 5 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -190,6 +190,24 @@ curl $API/documentos/$DOC/historial -H "X-Api-Key: $LLAVE"
 Devuelve las cuatro transiciones, empezando por el nacimiento del documento, que
 tiene `estadoAnterior` nulo. Cada una dice cuándo ocurrió y por qué.
 
+**8. Genera el XML y descárgalo** (RF-16, RF-25):
+
+```bash
+curl -X POST $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE"
+curl $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE" -o factura.xml
+```
+
+El primero calcula el CUFE, guarda el XML y mueve el documento a `EN_PROCESO`.
+El segundo devuelve el archivo. Repetir el `POST` responde `409`: un documento
+se representa de una sola forma, porque en la etapa 6 esos bytes concretos se
+firman.
+
+El XML valida contra el esquema oficial de UBL 2.1, que viene versionado en
+`schemas/ubl-2.1/`. **Eso significa que su estructura es correcta, no que la
+DIAN lo aceptaría:** el anexo técnico añade centenares de validaciones de
+negocio que ningún esquema expresa. Qué campos se implementaron y cuáles no
+está en [docs/07-cobertura-ubl.md](docs/07-cobertura-ubl.md).
+
 Para detener: `docker compose down`
 
 ### Para desarrollar
@@ -201,6 +219,13 @@ dotnet build          # compilar
 dotnet test           # ejecutar las pruebas
 dotnet run --project src/FevCore.Api
 ```
+
+Las pruebas de integración levantan PostgreSQL en contenedores con
+Testcontainers, así que necesitan Docker en marcha. Las de generación de XML
+validan contra los esquemas de UBL 2.1, que vienen **versionados** en
+`schemas/ubl-2.1/`: al clonar ya están, y no hace falta descargar nada. El
+script `scripts/descargar-esquemas-ubl.ps1` queda como registro de su
+procedencia y para poder regenerarlos.
 
 ---
 
@@ -245,6 +270,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 - **[Emisión asíncrona](docs/adr/0005-emision-asincrona.md)** — por qué la API no espera a la DIAN, y qué problema resuelve eso.
 - **[Bandeja de salida](docs/adr/0006-bandeja-de-salida.md)** — cómo se garantiza que ningún documento quede sin procesar aunque el proceso muera.
 - **[Bloqueo en la numeración](docs/adr/0009-bloqueo-numeracion.md)** — por qué una secuencia de base de datos no sirve para numeración fiscal.
+- **[Generación del XML](docs/adr/0011-generacion-xml.md)** — por qué el UBL se escribe a mano, y qué garantiza (y qué no) validar contra el esquema oficial.
 - **[Orden de bloqueos](docs/adr/0010-orden-de-bloqueos.md)** — cómo se evita un interbloqueo por diseño, y por qué aquí el bloqueo no protege la experiencia sino la verdad del dato.
 
 ---
@@ -258,7 +284,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | H2 | Emisor, adquirentes y productos | Completo |
 | H3 | Numeración correcta bajo concurrencia | Completo |
 | H4 | Notas crédito y débito, máquina de estados | Completo |
-| H5 | Generación del XML en UBL 2.1 | Pendiente |
+| H5 | Generación del XML en UBL 2.1 | Completo |
 | H6 | Firma digital | Pendiente |
 | H7 | Simulador y transmisión asíncrona | Pendiente |
 | H8 | Listados, OpenAPI generado y cierre | Pendiente |

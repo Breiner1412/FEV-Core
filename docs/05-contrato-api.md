@@ -152,7 +152,9 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 | `DOCUMENTO_REFERENCIADO_NO_APROBADO` | 409 | La factura referenciada existe pero no está aprobada. *(RN-03)* |
 | `DOCUMENTO_REFERENCIADO_INVALIDO` | 409 | Se intentó referenciar una nota en lugar de una factura. *(RN-05)* |
 | `NOTA_EXCEDE_VALOR_FACTURA` | 409 | El acumulado de notas crédito superaría el total de la factura. *(RN-04)* |
-| `XML_NO_DISPONIBLE` | 409 | El documento aún no ha sido firmado; no hay XML que descargar. |
+| `XML_NO_DISPONIBLE` | 409 | El documento aún no tiene XML generado. |
+| `XML_YA_GENERADO` | 409 | El documento ya tiene XML. Un documento se representa de una sola forma. |
+| `TIPO_DOCUMENTO_NO_SOPORTADO` | 409 | No hay plantilla XML para ese tipo de documento. |
 | `VALIDACION` | 400 | Error de forma. El campo `errores` detalla qué falló y dónde. |
 
 ---

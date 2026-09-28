@@ -157,11 +157,12 @@ Tres decisiones tomadas antes de redactar este documento condicionan varios requ
 | **RF-17** | El sistema debe firmar digitalmente el XML generado con el certificado del emisor. | Debe |
 | **RF-18** | El sistema debe transmitir el documento firmado al servicio de validación y registrar el identificador de seguimiento devuelto. | Debe |
 | **RF-19** | El sistema debe consultar el resultado de la validación hasta obtener un veredicto definitivo o agotar los reintentos configurados. | Debe |
-| **RF-20** | El sistema debe registrar el código único de identificación asignado por la autoridad al aprobarse el documento. | Debe |
+| **RF-20** | El sistema debe calcular el código único de identificación del documento (CUFE) e incluirlo en el XML antes de transmitirlo. | Debe |
 | **RF-21** | El sistema debe registrar, cuando un documento es rechazado, la lista de errores devueltos por la autoridad. | Debe |
 
 **Criterios de aceptación**
 - RF-16: el XML valida contra el esquema oficial del estándar.
+- RF-20: el código se calcula con SHA-384 sobre los valores tal como quedan escritos en el XML, y viaja dentro de él. **Corregido en la etapa 5:** la redacción original decía que lo asignaba la autoridad al aprobar, que es como funciona en otros países pero no en Colombia. Ver `07-cobertura-ubl.md`, sección 3.
 - RF-17: la firma es verificable con la clave pública del certificado, y cualquier alteración posterior del XML la invalida.
 - RF-19: ver RNF-05 sobre la política de reintentos.
 - RF-21: los errores se conservan asociados al documento y son consultables por el integrador.
