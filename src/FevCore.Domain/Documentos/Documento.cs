@@ -76,6 +76,24 @@ public sealed class Documento
 
     public bool EsNota => Tipo is TipoDocumento.NotaCredito or TipoDocumento.NotaDebito;
 
+    // ── Resultado de la generacion del XML (H5) ──
+
+    /// <summary>
+    /// CUFE: el codigo unico del documento. Nulo hasta que se genera el XML,
+    /// porque se calcula sobre los valores tal como quedan escritos en el.
+    /// </summary>
+    public string? CodigoUnico { get; private set; }
+
+    /// <summary>
+    /// El XML generado, guardado tal cual (RF-16, RF-25).
+    ///
+    /// Se conserva y no se vuelve a generar bajo demanda porque en H6 se
+    /// firmara, y una firma vale para unos bytes concretos. Regenerar el XML
+    /// mas tarde podria producir algo equivalente pero distinto byte a byte,
+    /// y eso invalidaria la firma.
+    /// </summary>
+    public string? Xml { get; private set; }
+
     public IReadOnlyList<Linea> Lineas => _lineas;
     public Totales Totales { get; }
 
@@ -352,6 +370,53 @@ public sealed class Documento
             detalle: detalle));
 
         Estado = nuevoEstado;
+    }
+
+    /// <summary>
+    /// Guarda el XML generado y su codigo unico, y avanza a EnProceso.
+    ///
+    /// Los tres efectos van juntos a proposito: un documento con XML pero en
+    /// estado Recibido, o en EnProceso sin XML, serian estados que no
+    /// significan nada.
+    /// </summary>
+    public void RegistrarXmlGenerado(
+        string xml,
+        string codigoUnico,
+        DateTimeOffset momento)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            throw new ExcepcionDominio(
+                "XML_VACIO",
+                "No se puede registrar un XML vacio.");
+        }
+
+        if (string.IsNullOrWhiteSpace(codigoUnico))
+        {
+            throw new ExcepcionDominio(
+                "CODIGO_UNICO_VACIO",
+                "El XML debe venir acompanado de su codigo unico.");
+        }
+
+        // El XML se genera UNA vez. Volver a generarlo despues de firmado
+        // invalidaria la firma, y despues de transmitido dejaria al sistema
+        // guardando algo distinto de lo que la autoridad recibio.
+        if (Xml is not null)
+        {
+            throw new ExcepcionDominio(
+                "XML_YA_GENERADO",
+                $"El documento {NumeroCompleto} ya tiene XML generado. " +
+                "Un documento se representa de una sola forma.");
+        }
+
+        // La transicion va PRIMERO. Verifica que el documento este donde
+        // corresponde, y si no lo esta, lanza antes de haber tocado nada. Al
+        // reves, un documento en estado invalido se quedaria con el XML
+        // asignado en memoria aunque la operacion hubiera fallado.
+        Transicionar(EstadoDocumento.EnProceso, "XML generado.", momento);
+
+        Xml = xml;
+        CodigoUnico = codigoUnico;
     }
 
     /// <summary>
