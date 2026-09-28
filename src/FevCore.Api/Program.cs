@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using FevCore.Api.Autenticacion;
 using FevCore.Api.Configuracion;
 using FevCore.Api.Errores;
@@ -17,17 +15,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── Servicios ──
 
+// La MISMA configuracion de JSON para los dos mundos de ASP.NET Core: la de
+// los controladores y la de los endpoints de API minima. Ver
+// ConfiguracionJson para por que son dos y que pasa si solo se ajusta una.
 builder.Services
     .AddControllers()
     .AddJsonOptions(opciones =>
-    {
-        // Las enumeraciones viajan como texto, no como numeros: "APROBADO"
-        // se entiende solo, y un 3 obliga a consultar una tabla de codigos.
-        // La politica de mayusculas con guion bajo produce exactamente los
-        // valores del contrato: Iva -> "IVA", NotaCredito -> "NOTA_CREDITO".
-        opciones.JsonSerializerOptions.Converters.Add(
-            new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper));
-    });
+        ConfiguracionJson.Aplicar(opciones.JsonSerializerOptions));
+
+builder.Services.ConfigureHttpJsonOptions(opciones =>
+    ConfiguracionJson.Aplicar(opciones.SerializerOptions));
 
 builder.Services.AddOpenApi();
 
