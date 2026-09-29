@@ -31,12 +31,12 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
     /// como XML cuando se calculan los digestos. El resultado es un
     /// "Malformed reference element" que no dice nada de todo esto.
     ///
-    /// GetIdElement es virtual justamente para esto. Se le anade el fragmento
-    /// de propiedades como segundo sitio donde mirar.
+    /// GetIdElement es virtual justamente para esto. Se le anaden los
+    /// fragmentos sueltos como sitios adicionales donde mirar.
     /// </summary>
-    private sealed class FirmaConPropiedadesXades(
+    private sealed class FirmaConFragmentos(
         XmlDocument documento,
-        XmlElement propiedades) : SignedXml(documento)
+        params XmlElement[] fragmentos) : SignedXml(documento)
     {
         public override XmlElement? GetIdElement(XmlDocument? documento, string id)
         {
@@ -47,12 +47,20 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
                 return enDocumento;
             }
 
-            if (propiedades.GetAttribute("Id") == id)
+            foreach (var fragmento in fragmentos)
             {
-                return propiedades;
+                if (fragmento.GetAttribute("Id") == id)
+                {
+                    return fragmento;
+                }
+
+                if (fragmento.SelectSingleNode($".//*[@Id='{id}']") is XmlElement anidado)
+                {
+                    return anidado;
+                }
             }
 
-            return propiedades.SelectSingleNode($".//*[@Id='{id}']") as XmlElement;
+            return null;
         }
     }
 
@@ -106,7 +114,11 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
         var propiedades = ConstruirPropiedadesFirmadas(
             documento, certificado, momento, identificador, idPropiedades);
 
-        var firma = new FirmaConPropiedadesXades(documento, propiedades)
+        // El KeyInfo tambien se construye de antemano, por el mismo motivo:
+        // la referencia que apunta a el tiene que poder resolverse.
+        var clavePublica = ConstruirElementoKeyInfo(documento, certificado, idKeyInfo);
+
+        var firma = new FirmaConFragmentos(documento, propiedades, clavePublica)
         {
             SigningKey = certificado.GetRSAPrivateKey()
                 ?? throw new InvalidOperationException(
@@ -126,22 +138,16 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
         referenciaDocumento.AddTransform(new XmlDsigEnvelopedSignatureTransform());
         firma.AddReference(referenciaDocumento);
 
-        // ── El bloque de la clave publica ──
-        //
-        // PENDIENTE: la DIAN espera TRES referencias, incluida una al propio
-        // KeyInfo. SignedXml no puede producirla: al calcular los digestos
-        // resuelve cada "#id" buscando el elemento en el documento o en los
-        // objetos de la firma, y el KeyInfo no esta en ninguno de los dos —
-        // solo existe cuando la firma se serializa, despues. Intentarlo
-        // falla con "Malformed reference element".
-        //
-        // Resolverlo exige construir el ds:Signature a mano en vez de dejar
-        // que SignedXml lo arme, o firmar en dos pasadas. Queda como lo
-        // primero de H6 manana. Mientras tanto la firma es criptografica-
-        // mente valida y verificable, pero NO es conforme al anexo tecnico.
+        // ── Referencia 2: el bloque de la clave publica ──
         firma.KeyInfo = ConstruirKeyInfo(certificado, idKeyInfo);
 
-        // ── Referencia 2: las propiedades XAdES ──
+        firma.AddReference(new Reference
+        {
+            Uri = $"#{idKeyInfo}",
+            DigestMethod = SignedXml.XmlDsigSHA256Url
+        });
+
+        // ── Referencia 3: las propiedades XAdES ──
         // El atributo Type es lo que convierte esto en XAdES y no en un
         // objeto cualquiera colgando de la firma.
         firma.AddObject(new DataObject { Data = propiedades.SelectNodes(".")! });
@@ -155,8 +161,21 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
 
         firma.ComputeSignature();
 
-        contenedor.AppendChild(
-            documento.ImportNode(firma.GetXml(), deep: true));
+        var xmlFirma = firma.GetXml();
+
+        // SignedXml serializa su propio KeyInfo, que NO es el elemento sobre
+        // el que se calculo el digesto. Serian equivalentes en significado y
+        // podrian diferir en un espacio o en una declaracion de prefijo, y
+        // entonces la verificacion fallaria. Se sustituye por el mismo
+        // elemento que se digirio, y asi no hay nada que pueda diferir.
+        if (xmlFirma.SelectSingleNode("*[local-name()='KeyInfo']") is XmlElement generado)
+        {
+            xmlFirma.ReplaceChild(
+                xmlFirma.OwnerDocument.ImportNode(clavePublica, deep: true),
+                generado);
+        }
+
+        contenedor.AppendChild(documento.ImportNode(xmlFirma, deep: true));
 
         return documento.OuterXml;
     }
@@ -181,6 +200,33 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
         raiz.InsertBefore(extensiones, raiz.FirstChild);
 
         return contenido;
+    }
+
+    /// <summary>
+    /// El bloque de clave publica como elemento del documento.
+    ///
+    /// Es el MISMO que acabara dentro de la firma: se digiere este y se
+    /// serializa este. Dejar que SignedXml genere el suyo al final abriria
+    /// la puerta a que difirieran en un espacio o en una declaracion de
+    /// prefijo, y el digesto ya no cuadraria.
+    ///
+    /// No se le copia el espacio de nombres por defecto del documento: el
+    /// KeyInfo vive en el de firma XML, y dentro de la firma ese es el que
+    /// hereda. Copiarle el de la factura cambiaria su significado.
+    /// </summary>
+    private static XmlElement ConstruirElementoKeyInfo(
+        XmlDocument documento,
+        X509Certificate2 certificado,
+        string id)
+    {
+        var elemento = (XmlElement)documento.ImportNode(
+            ConstruirKeyInfo(certificado, id).GetXml(), deep: true);
+
+        elemento.SetAttribute("Id", id);
+
+        HeredarEspaciosDeNombres(documento, elemento, incluirPorDefecto: false);
+
+        return elemento;
     }
 
     private static KeyInfo ConstruirKeyInfo(
@@ -284,17 +330,19 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
     /// Es el mismo principio que ValoresCufe en la etapa 5: cuando algo se
     /// calcula dos veces, las dos veces tienen que partir de lo mismo.
     /// </summary>
-    private static void HeredarEspaciosDeNombres(XmlDocument documento, XmlElement destino)
+    private static void HeredarEspaciosDeNombres(
+        XmlDocument documento,
+        XmlElement destino,
+        bool incluirPorDefecto = true)
     {
         var raiz = documento.DocumentElement!;
 
         foreach (XmlAttribute atributo in raiz.Attributes)
         {
-            var esDeclaracion =
-                atributo.Prefix == "xmlns" ||
-                (atributo.Prefix.Length == 0 && atributo.LocalName == "xmlns");
+            var esPorDefecto = atributo.Prefix.Length == 0 && atributo.LocalName == "xmlns";
+            var esDeclaracion = atributo.Prefix == "xmlns" || esPorDefecto;
 
-            if (!esDeclaracion)
+            if (!esDeclaracion || (esPorDefecto && !incluirPorDefecto))
             {
                 continue;
             }

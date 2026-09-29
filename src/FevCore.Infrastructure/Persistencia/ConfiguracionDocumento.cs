@@ -97,6 +97,9 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
         documento.Property(d => d.Xml)
             .HasColumnType("text");
 
+        documento.Property(d => d.XmlFirmado)
+            .HasColumnType("text");
+
         // ── Las dos copias de datos tributarios (RN-10) ──
         // Cada una en sus propias columnas, prefijadas por EF con el nombre
         // de su navegacion: EmisorSnapshot_RazonSocial, etc.

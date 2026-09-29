@@ -219,12 +219,9 @@ public sealed class FirmaXadesTests
     }
 
     /// <summary>
-    /// Hoy son DOS referencias: el documento y las propiedades XAdES. La
-    /// segunda es la que hace que esto sea XAdES y no XML-DSig corriente.
-    ///
-    /// La DIAN espera una tercera, al propio KeyInfo, y SignedXml no puede
-    /// producirla. Ver la nota en FirmadorXadesEpes. Cuando se resuelva,
-    /// esta prueba debe pasar a esperar tres.
+    /// Las tres referencias: el documento, el bloque de clave publica y las
+    /// propiedades XAdES. Sin la tercera esto seria XML-DSig corriente, no
+    /// XAdES, y la DIAN lo rechazaria.
     /// </summary>
     [Fact]
     public void La_firma_lleva_las_tres_referencias()
@@ -237,7 +234,7 @@ public sealed class FirmaXadesTests
         var referencias = firma.SelectNodes(
             ".//*[local-name()='Reference' and namespace-uri()='http://www.w3.org/2000/09/xmldsig#']")!;
 
-        Assert.Equal(2, referencias.Count);
+        Assert.Equal(3, referencias.Count);
 
         Assert.Contains(
             referencias.Cast<XmlElement>(),
