@@ -483,3 +483,7 @@ $RECYCLE.BIN/
 
 # Configuracion local con secretos
 .env
+
+# Salidas de diagnostico capturadas a mano
+pruebas.log
+*.log

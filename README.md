@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 6 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 7 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -48,6 +48,11 @@ curl http://localhost:8080/health
 ```json
 {"estado":"ok","momento":"2026-09-25T21:33:12.8682477+00:00"}
 ```
+
+Se levantan tres contenedores: la base de datos, la API y el **simulador** del
+servicio de validación, que responde en `http://localhost:5108`. La API le habla
+sola; el puerto queda expuesto para poder cambiarle el modo durante el recorrido
+de abajo.
 
 ### Emitir una factura
 
@@ -151,13 +156,46 @@ Sigue diciendo 150.000 y 357.000. Una factura emitida es una fotografía de un a
 
 Reenviar la petición del paso 4 con la misma `referenciaExterna` devuelve `200` y el mismo documento, sin crear otro ni consumir un número nuevo.
 
-**6. Emite una nota crédito.** Una nota solo corrige una factura **aprobada**
-(RN-03), y la transmisión real llega en H7, así que fuera de producción hay un
-endpoint que recorre la máquina de estados a mano:
+**6. Míralo avanzar solo.** Nadie tiene que empujarlo. Un trabajador en segundo
+plano toma el documento de la bandeja de salida, genera su XML, lo firma y lo
+transmite al simulador; después consulta el veredicto hasta obtenerlo. Consulta
+el mismo documento un par de veces con unos segundos de diferencia:
 
 ```bash
 DOC=<pega aqui el id de la factura>
 
+curl $API/documentos/$DOC -H "X-Api-Key: $LLAVE"
+```
+
+El `estado` recorre `RECIBIDO` → `EN_PROCESO` → `TRANSMITIDO` → `APROBADO`, y
+aparece un `identificadorSeguimiento`. El campo `historial` guarda cada paso con
+su motivo, así que se puede reconstruir qué pasó y cuándo.
+
+**Prueba a romperlo.** El simulador obedece cuatro modos, y son la razón de que
+exista:
+
+```bash
+SIM=http://localhost:5108
+
+curl -X PUT $SIM/simulador/configuracion -H "Content-Type: application/json" -d '{"modo":"RECHAZA"}'
+curl -X PUT $SIM/simulador/configuracion -H "Content-Type: application/json" -d '{"modo":"CAIDO"}'
+curl -X PUT $SIM/simulador/configuracion -H "Content-Type: application/json" -d '{"modo":"SIN_RESPUESTA"}'
+curl -X PUT $SIM/simulador/configuracion -H "Content-Type: application/json" -d '{"modo":"APRUEBA"}'
+```
+
+Con `RECHAZA`, el documento acaba en `RECHAZADO` y `erroresValidacion` trae los
+motivos. Con `CAIDO`, el trabajador reintenta esperando cada vez más, y vuelve a
+avanzar en cuanto el simulador se recupera. Con `SIN_RESPUESTA` —el que importa—
+el documento acaba en `FALLIDO`, que **no** significa rechazado: significa que
+nadie sabe si la DIAN lo recibió, y que hace falta una persona antes de volver a
+emitir. El porqué está en el [ADR-0014](docs/adr/0014-resultado-desconocido.md).
+
+**7. Emite una nota crédito.** Una nota solo corrige una factura **aprobada**
+(RN-03). Si el simulador está en `APRUEBA`, la factura del paso 4 llega sola a
+ese estado y no hace falta nada más. Si prefieres no levantar el simulador, fuera
+de producción hay un endpoint que recorre la máquina de estados a mano:
+
+```bash
 for ESTADO in EN_PROCESO TRANSMITIDO APROBADO; do
   curl -X POST $API/desarrollo/documentos/$DOC/estado     -H "X-Api-Key: $LLAVE" -H "Content-Type: application/json"     -d "{\"estado\": \"$ESTADO\", \"motivo\": \"Avance manual\"}"
 done
@@ -241,8 +279,12 @@ Con el [SDK de .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0):
 ```bash
 dotnet build          # compilar
 dotnet test           # ejecutar las pruebas
-dotnet run --project src/FevCore.Api
+dotnet run --project src/FevCore.DianSimulator   # en una terminal
+dotnet run --project src/FevCore.Api             # en otra
 ```
+
+El simulador escucha en `http://localhost:5108`, que es adonde apunta la API por
+defecto. Sin él, los documentos se quedan reintentando y acaban en `FALLIDO`.
 
 Las pruebas de integración levantan PostgreSQL en contenedores con
 Testcontainers, así que necesitan Docker en marcha. Las de generación de XML
@@ -284,7 +326,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | 2 | [Requerimientos](docs/02-requerimientos.md) | 25 funcionales, 13 reglas de negocio, 12 no funcionales |
 | 3 | [Modelo de dominio](docs/03-modelo-dominio.md) | 12 entidades, 6 agregados, 33 invariantes |
 | 4 | [Arquitectura](docs/04-arquitectura.md) | Capas, flujos y estrategia de pruebas |
-| — | [Decisiones (ADR)](docs/adr/) | 9 decisiones con sus alternativas descartadas |
+| — | [Decisiones (ADR)](docs/adr/) | 14 decisiones con sus alternativas descartadas |
 | 5 | [Contrato de la API](docs/05-contrato-api.md) | Endpoints, códigos de error y guía de integración |
 | — | [Especificación OpenAPI](api/openapi.yaml) | El contrato en formato procesable |
 | 6 | [Plan de entregas](docs/06-plan-entregas.md) | Los 9 hitos y su definición de terminado |
@@ -297,6 +339,8 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 - **[Firma XAdES-EPES](docs/adr/0012-firma-xades.md)** — cómo se construye XAdES sobre lo que .NET sí trae, y los dos errores de canonicalización que costaron encontrar.
 - **[Generación del XML](docs/adr/0011-generacion-xml.md)** — por qué el UBL se escribe a mano, y qué garantiza (y qué no) validar contra el esquema oficial.
 - **[Orden de bloqueos](docs/adr/0010-orden-de-bloqueos.md)** — cómo se evita un interbloqueo por diseño, y por qué aquí el bloqueo no protege la experiencia sino la verdad del dato.
+- **[Resultado desconocido](docs/adr/0014-resultado-desconocido.md)** — por qué "no sé si llegó" es un desenlace distinto de "falló", y qué pasa si se confunden.
+- **[Toma de tareas](docs/adr/0013-toma-de-tareas.md)** — cómo varios trabajadores se reparten la bandeja sin pisarse y sin retener una conexión mientras esperan a un tercero.
 
 ---
 
@@ -311,7 +355,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | H4 | Notas crédito y débito, máquina de estados | Completo |
 | H5 | Generación del XML en UBL 2.1 | Completo |
 | H6 | Firma digital | Completo |
-| H7 | Simulador y transmisión asíncrona | Pendiente |
+| H7 | Simulador y transmisión asíncrona | Completo |
 | H8 | Listados, OpenAPI generado y cierre | Pendiente |
 
 ---
