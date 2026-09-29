@@ -129,6 +129,32 @@ public sealed record DatosTributarios
                 .Distinct()]);
     }
 
+    /// <summary>
+    /// Devuelve una copia independiente de estos datos.
+    ///
+    /// La usa quien necesita conservarlos tal como estaban en un momento
+    /// dado (RN-10). Sin ella, el documento y la parte compartirian el
+    /// mismo objeto en memoria, y la "copia" seria copia solo de nombre:
+    /// su independencia dependeria de que nadie mutara el original, no de
+    /// un mecanismo. Entity Framework lo advierte al rastrear una misma
+    /// instancia bajo dos identidades distintas.
+    ///
+    /// Se copia tambien la lista de responsabilidades: un record clona sus
+    /// campos, y clonar un campo que es una referencia deja las dos copias
+    /// apuntando a la misma lista.
+    /// </summary>
+    public DatosTributarios Copiar() => new(
+        tipoIdentificacion: TipoIdentificacion,
+        identificacion: Identificacion,
+        digitoVerificacion: DigitoVerificacion,
+        razonSocial: RazonSocial,
+        direccion: Direccion,
+        municipioCodigo: MunicipioCodigo,
+        correo: Correo,
+        telefono: Telefono,
+        regimen: Regimen,
+        responsabilidades: [.. Responsabilidades]);
+
     // ── Igualdad por valor ──
 
     /// <summary>
