@@ -83,6 +83,13 @@ builder.Services.AddScoped<ConsultarDocumentoHandler>();
 builder.Services.AddScoped<EmitirNotaHandler>();
 builder.Services.AddScoped<TransicionarDocumentoHandler>();
 builder.Services.AddScoped<GenerarXmlHandler>();
+builder.Services.AddScoped<FirmarDocumentoHandler>();
+
+// El certificado se carga una vez: leerlo y descifrarlo en cada peticion
+// seria trabajo repetido sobre un dato que no cambia mientras el proceso
+// viva. La vigencia SI se comprueba en cada firma (INV-CER-01).
+builder.Services.AddSingleton<IProveedorCertificado, ProveedorCertificadoConfiguracion>();
+builder.Services.AddSingleton<IFirmadorXml, FirmadorXadesEpes>();
 
 // El ambiente entra en el codigo unico, asi que un documento de pruebas y
 // uno de produccion con los mismos datos producen codigos distintos. Por

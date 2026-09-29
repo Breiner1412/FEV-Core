@@ -8,7 +8,8 @@ namespace FevCore.Api.Controllers;
 [Route("api/v1/documentos")]
 public sealed class DocumentosController(
     ConsultarDocumentoHandler manejador,
-    GenerarXmlHandler generador) : ControllerBase
+    GenerarXmlHandler generador,
+    FirmarDocumentoHandler firmador) : ControllerBase
 {
     /// <summary>
     /// Consulta un documento por su identificador (RF-22).
@@ -86,6 +87,27 @@ public sealed class DocumentosController(
     }
 
     /// <summary>
+    /// Firma digitalmente el XML del documento (RF-17).
+    ///
+    /// No cambia el estado: firmar no es una transicion. El documento sigue
+    /// EN_PROCESO, que es el estado que los requerimientos definen como "se
+    /// esta generando o firmando el XML".
+    /// </summary>
+    [HttpPost("{id:guid}/firma")]
+    [ProducesResponseType<RespuestaDocumento>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Firmar(Guid id, CancellationToken cancelacion)
+    {
+        var documento = await firmador.EjecutarAsync(id, cancelacion);
+
+        return documento is null
+            ? NoEncontrado(id)
+            : Ok(RespuestaDocumento.Desde(documento));
+    }
+
+    /// <summary>
     /// Descarga el XML ya generado (RF-25).
     ///
     /// Devuelve application/xml y no JSON: es un archivo, y quien lo pide lo
@@ -106,7 +128,12 @@ public sealed class DocumentosController(
             return NoEncontrado(id);
         }
 
-        if (documento.Xml is null)
+        // Si esta firmado, se devuelve el firmado: es el documento que
+        // circula y el que la autoridad recibiria. El sin firmar se conserva
+        // para poder reproducir el calculo, no para entregarlo.
+        var xml = documento.XmlFirmado ?? documento.Xml;
+
+        if (xml is null)
         {
             return Conflict(new ProblemDetails
             {
@@ -124,7 +151,7 @@ public sealed class DocumentosController(
         }
 
         return File(
-            System.Text.Encoding.UTF8.GetBytes(documento.Xml),
+            System.Text.Encoding.UTF8.GetBytes(xml),
             "application/xml",
             $"{documento.NumeroCompleto}.xml");
     }
