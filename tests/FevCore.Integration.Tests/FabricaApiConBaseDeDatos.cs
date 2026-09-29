@@ -1,11 +1,18 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using FevCore.Api.Salida;
+using FevCore.Application.Abstracciones;
+using FevCore.Application.Salida;
 using FevCore.Domain.Integradores;
 using FevCore.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Testcontainers.PostgreSql;
 
 namespace FevCore.Integration.Tests;
@@ -35,6 +42,12 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
         .Build();
 
     public Guid IntegradorId { get; private set; }
+
+    /// <summary>
+    /// La autoridad, gobernable desde la prueba. Sustituye al proveedor HTTP
+    /// real, que tiene sus propias pruebas de traduccion de protocolo.
+    /// </summary>
+    public ProveedorValidacionSimulado Validacion { get; } = new();
 
     /// <summary>
     /// Certificado autofirmado, generado al vuelo para cada ejecucion.
@@ -72,17 +85,62 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
         // de eso se encarga esta fabrica, cuando el contenedor ya esta listo.
         constructor.UseEnvironment("Testing");
 
-        constructor.UseSetting(
-            "ConnectionStrings:Principal",
-            _contenedor.GetConnectionString());
+        // AddInMemoryCollection y no UseSetting: los valores de UseSetting
+        // entran en la configuracion del anfitrion, antes de que la
+        // aplicacion agregue las suyas, y cualquier fuente posterior puede
+        // pisarlos sin avisar. Lo que se agrega aqui se anade al final de
+        // la cadena, asi que gana siempre. La diferencia se vio en una
+        // corrida real: el trabajador de fondo arranco pese a estar
+        // apagado por UseSetting.
+        constructor.ConfigureAppConfiguration(configuracion =>
+            configuracion.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Principal"] = _contenedor.GetConnectionString(),
 
-        // El certificado entra por configuracion, igual que en produccion:
-        // en base 64 por variable de entorno, nunca como archivo (RNF-01).
-        constructor.UseSetting(
-            "Firma:CertificadoBase64",
-            Convert.ToBase64String(Certificado.Export(X509ContentType.Pfx, "pruebas")));
+                // El certificado entra por configuracion, igual que en
+                // produccion: en base 64, nunca como archivo (RNF-01).
+                ["Firma:CertificadoBase64"] = Convert.ToBase64String(
+                    Certificado.Export(X509ContentType.Pfx, "pruebas")),
+                ["Firma:Clave"] = "pruebas",
 
-        constructor.UseSetting("Firma:Clave", "pruebas");
+                // El trabajador en segundo plano se apaga: las pruebas
+                // deciden cuando se procesa una tarea. Un bucle que corre
+                // solo no se deja gobernar, y lo que no se gobierna no se
+                // puede probar.
+                ["Salida:Habilitado"] = "false",
+
+                // Sin espera entre reintentos: la espera creciente se prueba
+                // aparte, en el dominio. Aqui solo estorbaria.
+                ["Salida:EsperaMaximaSegundos"] = "0",
+                ["Salida:MaximoIntentos"] = "3",
+                ["Salida:TiempoDeAbandonoSegundos"] = "0",
+            }));
+
+        constructor.ConfigureTestServices(servicios =>
+        {
+            // RemoveAll y no Replace: AddHttpClient registra varias cosas
+            // alrededor del tipo, y dejar alguna suelta haria que se
+            // resolviera el proveedor real.
+            servicios.RemoveAll<IProveedorValidacion>();
+            servicios.AddSingleton<IProveedorValidacion>(Validacion);
+
+            // Y aparte de apagarlo por configuracion, se retira el
+            // registro. Apagar depende de que la opcion llegue; retirar,
+            // no. Es el mismo cinturon con tirantes que se pone en
+            // cualquier mecanismo que, al fallar, falla en silencio.
+            //
+            // Se quita ESTE descriptor y no todos los IHostedService: el
+            // servidor web tambien es uno, y quitarlos todos dejaria la
+            // aplicacion sin atender peticiones.
+            var registro = servicios.FirstOrDefault(descriptor =>
+                descriptor.ServiceType == typeof(IHostedService)
+                && descriptor.ImplementationType == typeof(TrabajadorSalida));
+
+            if (registro is not null)
+            {
+                servicios.Remove(registro);
+            }
+        });
     }
 
     public async Task InitializeAsync()
@@ -114,6 +172,33 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
     {
         await _contenedor.DisposeAsync();
         await base.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Procesa una tarea de la bandeja, como haria el trabajador.
+    ///
+    /// Devuelve falso si no habia ninguna pendiente.
+    /// </summary>
+    public async Task<bool> ProcesarUnaTareaAsync()
+    {
+        using var alcance = Services.CreateScope();
+
+        return await alcance.ServiceProvider
+            .GetRequiredService<ProcesadorTareas>()
+            .ProcesarUnaAsync();
+    }
+
+    /// <summary>Vacia la bandeja, con un tope por si algo no avanzara.</summary>
+    public async Task<int> ProcesarTodoAsync(int tope = 20)
+    {
+        var procesadas = 0;
+
+        while (procesadas < tope && await ProcesarUnaTareaAsync())
+        {
+            procesadas++;
+        }
+
+        return procesadas;
     }
 
     /// <summary>Cliente HTTP con la llave de API ya puesta.</summary>
