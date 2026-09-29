@@ -1047,6 +1047,10 @@ components:
         fechaEmision:
           type: string
           format: date-time
+        adquirenteId:
+          type: string
+          format: uuid
+          description: El adquirente en el catálogo, por si hace falta consultarlo.
         emisor:
           $ref: '#/components/schemas/DatosTributarios'
         adquirente:
@@ -1080,18 +1084,25 @@ components:
             CUFE en facturas, CUDE en notas. Lo calcula el emisor con SHA-384
             sobre los valores tal como quedan escritos en el XML, y viaja dentro
             de él. Nulo hasta que el XML se genera (RF-20).
+        identificadorSeguimiento:
+          type: string
+          nullable: true
+          description: |
+            Con qué conoce la autoridad este documento. Nulo hasta que se
+            transmite (RF-18).
         erroresValidacion:
           type: array
-          nullable: true
-          description: Presente solo si el estado es `RECHAZADO` (RF-21).
+          description: |
+            Por qué se rechazó el documento (RF-21). Lista vacía si no fue
+            rechazado; nunca ausente.
+
+            Un documento rechazado no se retransmite: se corrige y se emite uno
+            nuevo (RN-07), así que esto es lo único que el integrador puede usar
+            para saber qué arreglar.
           items:
-            $ref: '#/components/schemas/ErrorValidacionAutoridad'
-        creadoEn:
-          type: string
-          format: date-time
-        actualizadoEn:
-          type: string
-          format: date-time
+            type: string
+          example:
+            - "FAD06: NIT del emisor no autorizado."
 
     DocumentoResumen:
       type: object
@@ -1218,16 +1229,6 @@ components:
         detalle:
           type: string
           nullable: true
-
-    ErrorValidacionAutoridad:
-      type: object
-      properties:
-        codigo:
-          type: string
-          example: "FAB05"
-        descripcion:
-          type: string
-          example: "Total no corresponde con la sumatoria."
 
     DatosTributarios:
       type: object

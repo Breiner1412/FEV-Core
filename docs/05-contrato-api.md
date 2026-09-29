@@ -202,7 +202,9 @@ Respuesta `202`:
   "estado": "RECIBIDO",
   "numeroCompleto": "SETP990000123",
   "totales": { "totalAPagar": 357000.00 },
-  "codigoUnico": null
+  "codigoUnico": null,
+  "identificadorSeguimiento": null,
+  "erroresValidacion": []
 }
 ```
 
@@ -222,6 +224,13 @@ Consultar cada pocos segundos hasta que el estado sea terminal: `APROBADO`, `REC
 | `APROBADO` | Listo. `codigoUnico` está disponible y el XML se puede descargar. |
 | `RECHAZADO` | La autoridad lo rechazó. Revisar `erroresValidacion`, corregir y emitir un documento nuevo. El original no se puede corregir *(RN-07)*. |
 | `FALLIDO` | **Resultado desconocido.** Requiere revisión manual antes de emitir un reemplazo. Ver más abajo. |
+
+Dos campos aparecen durante el recorrido:
+
+- `identificadorSeguimiento` — con qué conoce la autoridad el documento. Aparece al transmitirlo y sirve para reclamar por fuera del sistema.
+- `erroresValidacion` — **siempre presente**, lista vacía mientras no haya rechazo. Nunca hay que comprobar si el campo existe, solo si tiene elementos.
+
+Sobre la cadencia: el trabajo ocurre en segundo plano y la latencia la domina la autoridad, no este sistema. Consultar cada dos o tres segundos es razonable; consultar cada 100 ms no acelera nada.
 
 ### 5.4 Reintentos seguros
 
@@ -289,3 +298,8 @@ Declarado explícitamente para que ningún integrador asuma de más.
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-09-24 | Versión inicial. 13 rutas, 31 esquemas, 20 códigos de error. |
+| 1.1 | 2026-09-29 | H7. Se añaden `identificadorSeguimiento` y `erroresValidacion` al documento. 15 rutas, 30 esquemas. |
+
+**Cambio incompatible en 1.1.** `erroresValidacion` se documentaba como lista de objetos con `codigo` y `descripcion`, y la implementación devuelve textos. Se corrigió el contrato para que diga la verdad, no la implementación para que encajara con el contrato: un documento que promete algo que el código no hace es peor que no tenerlo.
+
+La forma con código y descripción es la que usa la DIAN real y la mejor de las dos. Queda registrada como deuda para cuando se sustituya el simulador por el servicio de verdad; hacerlo ahora sería inventar códigos.

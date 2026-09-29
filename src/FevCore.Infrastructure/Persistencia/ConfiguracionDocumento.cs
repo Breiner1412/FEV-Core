@@ -276,5 +276,45 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
 
         documento.Navigation(d => d.Transiciones)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // ── Transmisiones: cada intento de entrega (RF-18, RN-13) ──
+        // Van dentro del agregado porque solo significan algo junto a su
+        // documento, y porque conservarlas TODAS es lo que permite saber si
+        // hubo un envio cuyo destino se desconoce.
+        documento.OwnsMany(d => d.Transmisiones, transmision =>
+        {
+            transmision.ToTable("transmisiones");
+            transmision.WithOwner().HasForeignKey("DocumentoId");
+
+            // Misma identidad natural que las transiciones: documento mas
+            // posicion. Un intento no existe fuera de su documento.
+            transmision.Property(t => t.NumeroIntento)
+                .ValueGeneratedNever()
+                .IsRequired();
+
+            transmision.HasKey("DocumentoId", nameof(Domain.Documentos.Transmision.NumeroIntento));
+
+            transmision.Property(t => t.EnviadaEn).IsRequired();
+
+            transmision.Property(t => t.IdentificadorSeguimiento).HasMaxLength(100);
+
+            transmision.Property(t => t.Resultado)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
+
+            transmision.Property(t => t.RespuestaCruda).HasMaxLength(2000);
+        });
+
+        documento.Navigation(d => d.Transmisiones)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // ── Errores de validacion (RF-21) ──
+        // Una lista de texto en una sola columna JSON, no una tabla aparte:
+        // solo se leen enteros, junto al documento, y nadie consulta por un
+        // error suelto.
+        documento.PrimitiveCollection(d => d.ErroresValidacion)
+            .HasColumnType("jsonb")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

@@ -185,4 +185,44 @@ public sealed class DatosTributariosTests
         // pierdan elementos de formas dificiles de diagnosticar.
         Assert.Equal(Crear().GetHashCode(), Crear().GetHashCode());
     }
+
+    // ── Copia para instantaneas (RN-10) ──
+
+    [Fact]
+    public void Copiar_devuelve_una_instancia_distinta()
+    {
+        var original = Crear();
+
+        var copia = original.Copiar();
+
+        // Que sean objetos distintos es LO QUE SE PRUEBA, no un detalle:
+        // si copiar devolviera el mismo objeto, un documento emitido y la
+        // parte compartirian datos, y cambiar el maestro reescribiria lo
+        // que ya se emitio.
+        Assert.NotSame(original, copia);
+    }
+
+    [Fact]
+    public void Copiar_conserva_todo_el_contenido()
+    {
+        var original = Crear(responsabilidades: ["O-13", "O-15"]);
+
+        var copia = original.Copiar();
+
+        Assert.Equal(original, copia);
+    }
+
+    [Fact]
+    public void Copiar_no_comparte_la_lista_de_responsabilidades()
+    {
+        var original = Crear(responsabilidades: ["O-13", "O-15"]);
+
+        var copia = original.Copiar();
+
+        // Clonar un record clona sus campos, y un campo que es una
+        // referencia se clona como referencia: las dos copias acabarian
+        // apuntando a la misma lista.
+        Assert.NotSame(original.Responsabilidades, copia.Responsabilidades);
+        Assert.Equal(original.Responsabilidades, copia.Responsabilidades);
+    }
 }

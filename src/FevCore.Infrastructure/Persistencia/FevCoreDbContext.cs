@@ -4,6 +4,7 @@ using FevCore.Domain.Emisores;
 using FevCore.Domain.Integradores;
 using FevCore.Domain.Numeracion;
 using FevCore.Domain.Productos;
+using FevCore.Domain.Salida;
 using Microsoft.EntityFrameworkCore;
 
 namespace FevCore.Infrastructure.Persistencia;
@@ -24,6 +25,7 @@ public sealed class FevCoreDbContext(DbContextOptions<FevCoreDbContext> opciones
     public DbSet<Adquirente> Adquirentes => Set<Adquirente>();
     public DbSet<Producto> Productos => Set<Producto>();
     public DbSet<RangoNumeracion> RangosNumeracion => Set<RangoNumeracion>();
+    public DbSet<TareaSalida> TareasSalida => Set<TareaSalida>();
 
     protected override void OnModelCreating(ModelBuilder constructor)
     {

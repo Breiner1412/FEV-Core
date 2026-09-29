@@ -1,6 +1,7 @@
 using FevCore.Application.Abstracciones;
 using FevCore.Domain.Comun;
 using FevCore.Domain.Documentos;
+using FevCore.Domain.Salida;
 
 namespace FevCore.Application.Documentos;
 
@@ -29,6 +30,7 @@ public sealed class EmitirNotaHandler(
     IRepositorioProductos repositorioProductos,
     IRepositorioRangos repositorioRangos,
     IUnidadDeTrabajo unidadDeTrabajo,
+    IRepositorioTareas tareas,
     TimeProvider reloj)
 {
     public async Task<ResultadoEmision> EjecutarAsync(
@@ -118,12 +120,23 @@ public sealed class EmitirNotaHandler(
             facturaReferenciada: factura,
             motivo: comando.Motivo,
             observaciones: comando.Observaciones,
-            emisorSnapshot: emisor.Datos,
-            adquirenteSnapshot: adquirente.Datos,
+            emisorSnapshot: emisor.Datos.Copiar(),
+            adquirenteSnapshot: adquirente.Datos.Copiar(),
             lineas: lineas,
             notasCreditoPrevias: notasPrevias);
 
         await repositorio.AgregarAsync(nota, cancelacion);
+
+        // La tarea de la bandeja entra en la MISMA transaccion que el
+        // documento (ADR-0006). Ese es todo el punto del patron: si el
+        // documento se guardara aqui y el trabajo se encolara aparte,
+        // existiria un instante en que uno de los dos podria perderse. Un
+        // documento sin tarea nunca se procesaria y nadie se enteraria; una
+        // tarea sin documento fallaria para siempre. Con los dos en la misma
+        // transaccion, o entran ambos o no entra ninguno.
+        await tareas.AgregarAsync(
+            TareaSalida.Crear(nota.Id, TipoTarea.Emitir, fechaEmision),
+            cancelacion);
         await repositorio.GuardarCambiosAsync(cancelacion);
 
         await transaccion.ConfirmarAsync(cancelacion);

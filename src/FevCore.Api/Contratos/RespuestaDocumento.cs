@@ -44,6 +44,22 @@ public sealed record RespuestaDocumento
     public MotivoNota? Motivo { get; init; }
     public string? Observaciones { get; init; }
 
+    // ── Resultado ante la autoridad (RF-18, RF-21) ──
+
+    /// <summary>
+    /// El identificador con el que la autoridad conoce este documento. Nulo
+    /// hasta que se transmite.
+    /// </summary>
+    public string? IdentificadorSeguimiento { get; init; }
+
+    /// <summary>
+    /// Por que la autoridad rechazo el documento. Vacio si no fue rechazado.
+    ///
+    /// Son lo que el integrador necesita para corregir: un documento
+    /// rechazado no se retransmite, se reemplaza por uno nuevo (RN-07).
+    /// </summary>
+    public required IReadOnlyList<string> ErroresValidacion { get; init; }
+
     public static RespuestaDocumento Desde(Documento documento) => new()
     {
         Id = documento.Id,
@@ -63,7 +79,9 @@ public sealed record RespuestaDocumento
         CodigoUnico = documento.CodigoUnico,
         DocumentoReferenciadoId = documento.DocumentoReferenciadoId,
         Motivo = documento.Motivo,
-        Observaciones = documento.Observaciones
+        Observaciones = documento.Observaciones,
+        IdentificadorSeguimiento = documento.IdentificadorSeguimiento,
+        ErroresValidacion = [.. documento.ErroresValidacion]
     };
 }
 

@@ -17,6 +17,20 @@ services:
       timeout: 5s
       retries: 10
 
+  simulador:
+    build:
+      context: .
+      dockerfile: src/FevCore.DianSimulator/Dockerfile
+    container_name: fevcore-simulador
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+    # Se expone al anfitrion para poder cambiarle el modo a mano durante un
+    # recorrido: PUT /simulador/configuracion con APRUEBA, RECHAZA, CAIDO o
+    # SIN_RESPUESTA.
+    ports:
+      - "5108:8080"
+
   api:
     build:
       context: .
@@ -26,11 +40,19 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__Principal: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # Dentro de la red de compose se llama al simulador por su nombre de
+      # servicio, no por localhost: cada contenedor tiene el suyo.
+      Validacion__UrlBase: "http://simulador:8080"
+      Firma__CertificadoBase64: "${Firma__CertificadoBase64}"
+      Firma__Clave: "${Firma__Clave}"
+      Dian__Ambiente: "${Dian__Ambiente}"
     ports:
       - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
+      simulador:
+        condition: service_started
 
 volumes:
   datos-postgres:

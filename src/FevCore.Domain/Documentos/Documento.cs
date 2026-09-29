@@ -14,6 +14,8 @@ public sealed class Documento
 {
     private readonly List<Linea> _lineas;
     private readonly List<TransicionEstado> _transiciones;
+    private readonly List<Transmision> _transmisiones;
+    private readonly List<string> _erroresValidacion;
 
     public Guid Id { get; }
     public TipoDocumento Tipo { get; }
@@ -113,6 +115,24 @@ public sealed class Documento
     /// </summary>
     public IReadOnlyList<TransicionEstado> Transiciones => _transiciones;
 
+    /// <summary>Cada intento de entrega al servicio de validacion (RF-18).</summary>
+    public IReadOnlyList<Transmision> Transmisiones => _transmisiones;
+
+    /// <summary>Errores devueltos por la autoridad al rechazar (RF-21).</summary>
+    public IReadOnlyList<string> ErroresValidacion => _erroresValidacion;
+
+    /// <summary>
+    /// El identificador con el que la autoridad conoce este documento.
+    ///
+    /// Se deduce de las transmisiones en vez de guardarse aparte: si fuera
+    /// un campo propio, podria quedar desalineado con la transmision que
+    /// realmente lo produjo.
+    /// </summary>
+    public string? IdentificadorSeguimiento => _transmisiones
+        .Where(t => t.Resultado == ResultadoTransmision.Aceptada)
+        .Select(t => t.IdentificadorSeguimiento)
+        .LastOrDefault();
+
     /// <summary>
     /// Requerido por Entity Framework para reconstruir el documento desde la
     /// base de datos. EF asigna las propiedades por reflexion despues de
@@ -125,6 +145,8 @@ public sealed class Documento
     {
         _lineas = [];
         _transiciones = [];
+        _transmisiones = [];
+        _erroresValidacion = [];
         ReferenciaExterna = null!;
         Prefijo = null!;
         Moneda = null!;
@@ -169,6 +191,8 @@ public sealed class Documento
         Observaciones = observaciones;
         _lineas = lineas;
         Totales = totales;
+        _transmisiones = [];
+        _erroresValidacion = [];
 
         // El nacimiento tambien queda registrado, con EstadoAnterior nulo.
         // Asi el historial de RF-23 esta completo desde la primera consulta
@@ -474,6 +498,103 @@ public sealed class Documento
 
         XmlFirmado = xmlFirmado;
     }
+
+    /// <summary>
+    /// Deja constancia de un intento de entrega (RF-18, RNF-05).
+    ///
+    /// Si el servicio la acepto, el documento avanza a Transmitido. En
+    /// cualquier otro caso el intento queda registrado y el documento no se
+    /// mueve: sera la bandeja de salida quien decida si reintentar o darlo
+    /// por fallido.
+    /// </summary>
+    public Transmision RegistrarTransmision(
+        ResultadoTransmision resultado,
+        DateTimeOffset momento,
+        string? identificadorSeguimiento = null,
+        string? respuestaCruda = null)
+    {
+        var transmision = Transmision.Registrar(
+            numeroIntento: _transmisiones.Count + 1,
+            enviadaEn: momento,
+            resultado: resultado,
+            identificadorSeguimiento: identificadorSeguimiento,
+            respuestaCruda: respuestaCruda);
+
+        _transmisiones.Add(transmision);
+
+        if (resultado == ResultadoTransmision.Aceptada)
+        {
+            Transicionar(
+                EstadoDocumento.Transmitido,
+                "Entregado al servicio de validacion.",
+                momento,
+                detalle: identificadorSeguimiento);
+        }
+
+        return transmision;
+    }
+
+    /// <summary>La autoridad valido el documento (RF-19).</summary>
+    public void RegistrarAprobacion(DateTimeOffset momento) =>
+        Transicionar(
+            EstadoDocumento.Aprobado,
+            "Validado por la autoridad.",
+            momento,
+            detalle: IdentificadorSeguimiento);
+
+    /// <summary>
+    /// La autoridad rechazo el documento (RF-19, RF-21).
+    ///
+    /// Los errores se conservan: son lo que el integrador necesita para
+    /// corregir y emitir uno nuevo, porque un rechazado no se retransmite
+    /// (RN-07).
+    /// </summary>
+    public void RegistrarRechazo(IEnumerable<string> errores, DateTimeOffset momento)
+    {
+        var lista = errores?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? [];
+
+        if (lista.Count == 0)
+        {
+            throw new ExcepcionDominio(
+                "RECHAZO_SIN_ERRORES",
+                "Un rechazo sin errores no le dice nada al integrador. La " +
+                "autoridad siempre indica por que rechaza.");
+        }
+
+        _erroresValidacion.Clear();
+        _erroresValidacion.AddRange(lista);
+
+        Transicionar(
+            EstadoDocumento.Rechazado,
+            "Rechazado por la autoridad.",
+            momento,
+            detalle: $"{lista.Count} error(es) de validacion.");
+    }
+
+    /// <summary>
+    /// El sistema no logro completar el proceso (RN-13).
+    ///
+    /// FALLIDO no significa que el documento no llegara: significa que NO SE
+    /// SABE. Si hubo una transmision sin respuesta, la autoridad pudo
+    /// haberlo recibido. Por eso exige revision manual antes de emitir un
+    /// reemplazo, y por eso las transmisiones se conservan todas.
+    /// </summary>
+    public void RegistrarFallo(string motivo, DateTimeOffset momento) =>
+        Transicionar(
+            EstadoDocumento.Fallido,
+            motivo,
+            momento,
+            detalle: HuboEnvioSinRespuesta
+                ? "RESULTADO DESCONOCIDO: hubo al menos un envio sin respuesta. " +
+                  "El documento pudo haber llegado a la autoridad."
+                : "No se completo el proceso. No consta que el documento llegara.");
+
+    /// <summary>
+    /// Si algun intento salio sin que volviera respuesta. Es lo que separa
+    /// "no llego" de "no se sabe" (RN-13, INV-TRM-02).
+    /// </summary>
+    public bool HuboEnvioSinRespuesta =>
+        _transmisiones.Any(t => t.Resultado == ResultadoTransmision.SinRespuesta);
 
     /// <summary>
     /// Validaciones y calculos que comparten factura y nota.
