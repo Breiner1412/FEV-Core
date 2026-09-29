@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using FevCore.Domain.Integradores;
 using FevCore.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Hosting;
@@ -34,6 +36,36 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
 
     public Guid IntegradorId { get; private set; }
 
+    /// <summary>
+    /// Certificado autofirmado, generado al vuelo para cada ejecucion.
+    ///
+    /// No se guarda ninguno en el repositorio. Un certificado con clave
+    /// privada es un secreto, y RNF-01 dice que no puede haber secretos en
+    /// el codigo fuente. Aunque este sea de juguete, versionarlo seria
+    /// aceptar la costumbre por la que acaban filtrandose los de verdad.
+    /// </summary>
+    public X509Certificate2 Certificado { get; } = CrearCertificado();
+
+    private static X509Certificate2 CrearCertificado()
+    {
+        using var rsa = RSA.Create(2048);
+
+        var solicitud = new CertificateRequest(
+            "CN=Comercializadora del Eje SAS, O=FEV-Core, C=CO",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        using var generado = solicitud.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddYears(1));
+
+        return X509CertificateLoader.LoadPkcs12(
+            generado.Export(X509ContentType.Pfx, "pruebas"),
+            "pruebas",
+            X509KeyStorageFlags.Exportable);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder constructor)
     {
         // El entorno Testing evita que la aplicacion migre al arrancar:
@@ -43,6 +75,14 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
         constructor.UseSetting(
             "ConnectionStrings:Principal",
             _contenedor.GetConnectionString());
+
+        // El certificado entra por configuracion, igual que en produccion:
+        // en base 64 por variable de entorno, nunca como archivo (RNF-01).
+        constructor.UseSetting(
+            "Firma:CertificadoBase64",
+            Convert.ToBase64String(Certificado.Export(X509ContentType.Pfx, "pruebas")));
+
+        constructor.UseSetting("Firma:Clave", "pruebas");
     }
 
     public async Task InitializeAsync()

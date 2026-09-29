@@ -113,6 +113,9 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 |---|---|---|
 | `EMISOR_INCOMPLETO` | 409 | Falta configurar datos del emisor o el certificado. No se consume consecutivo. *(RF-05)* |
 | `CERTIFICADO_VENCIDO` | 409 | El certificado de firma está fuera de vigencia. *(INV-CER-01)* |
+| `CERTIFICADO_NO_VIGENTE` | 409 | El certificado aún no ha entrado en vigencia. *(INV-CER-01)* |
+| `CERTIFICADO_NO_CONFIGURADO` | 409 | No hay certificado de firma configurado. |
+| `CERTIFICADO_INVALIDO` | 409 | El certificado configurado no se pudo cargar. |
 
 ### 4.3 Numeración
 
@@ -155,6 +158,8 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 | `XML_NO_DISPONIBLE` | 409 | El documento aún no tiene XML generado. |
 | `XML_YA_GENERADO` | 409 | El documento ya tiene XML. Un documento se representa de una sola forma. |
 | `TIPO_DOCUMENTO_NO_SOPORTADO` | 409 | No hay plantilla XML para ese tipo de documento. |
+| `XML_YA_FIRMADO` | 409 | El documento ya está firmado. Una firma vale para unos bytes concretos. |
+| `ESTADO_NO_PERMITE_FIRMAR` | 409 | Solo se firma un documento en `EN_PROCESO`. |
 | `VALIDACION` | 400 | Error de forma. El campo `errores` detalla qué falló y dónde. |
 
 ---

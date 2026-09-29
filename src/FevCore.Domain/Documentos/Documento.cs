@@ -94,6 +94,16 @@ public sealed class Documento
     /// </summary>
     public string? Xml { get; private set; }
 
+    /// <summary>
+    /// El XML con la firma digital incrustada (RF-17, RF-25).
+    ///
+    /// Se guarda aparte del generado y no lo reemplaza. Depurar un problema
+    /// de firma casi siempre exige comparar lo que se firmo con lo que
+    /// quedo firmado; con una sola columna, el original se pierde y con el
+    /// la posibilidad de reproducir el calculo.
+    /// </summary>
+    public string? XmlFirmado { get; private set; }
+
     public IReadOnlyList<Linea> Lineas => _lineas;
     public Totales Totales { get; }
 
@@ -417,6 +427,52 @@ public sealed class Documento
 
         Xml = xml;
         CodigoUnico = codigoUnico;
+    }
+
+    /// <summary>
+    /// Guarda el XML ya firmado (RF-17).
+    ///
+    /// NO cambia el estado. Firmar no es una transicion de la maquina de
+    /// estados: el documento sigue EN_PROCESO, que es precisamente el estado
+    /// que la seccion 6.1 define como "se esta generando o firmando el XML".
+    /// La marca de tiempo de la firma vive dentro del propio XAdES.
+    /// </summary>
+    public void RegistrarFirma(string xmlFirmado)
+    {
+        if (string.IsNullOrWhiteSpace(xmlFirmado))
+        {
+            throw new ExcepcionDominio(
+                "XML_VACIO",
+                "No se puede registrar una firma sobre un XML vacio.");
+        }
+
+        if (Xml is null)
+        {
+            throw new ExcepcionDominio(
+                "XML_NO_DISPONIBLE",
+                $"El documento {NumeroCompleto} no tiene XML generado. " +
+                "No hay nada que firmar.");
+        }
+
+        // Una firma vale para unos bytes concretos. Volver a firmar produciria
+        // otra firma sobre el mismo documento, y en H7 habria dos candidatos
+        // a "lo que se transmitio".
+        if (XmlFirmado is not null)
+        {
+            throw new ExcepcionDominio(
+                "XML_YA_FIRMADO",
+                $"El documento {NumeroCompleto} ya esta firmado.");
+        }
+
+        if (Estado != EstadoDocumento.EnProceso)
+        {
+            throw new ExcepcionDominio(
+                "ESTADO_NO_PERMITE_FIRMAR",
+                $"El documento {NumeroCompleto} esta en {Estado}. Solo se firma " +
+                "un documento en EnProceso.");
+        }
+
+        XmlFirmado = xmlFirmado;
     }
 
     /// <summary>

@@ -288,6 +288,42 @@ paths:
         '404':
           $ref: '#/components/responses/NoEncontrado'
 
+  /documentos/{id}/firma:
+    post:
+      tags: [Consulta]
+      summary: Firmar digitalmente el documento
+      description: |
+        Firma el XML en formato XAdES-EPES con el certificado del emisor y
+        guarda el resultado.
+
+        NO cambia el estado: firmar no es una transición de la máquina de
+        estados. El documento sigue en `EN_PROCESO`, que es el estado definido
+        como "se está generando o firmando el XML".
+
+        Responde `409` con `XML_YA_FIRMADO` si el documento ya está firmado: una
+        firma vale para unos bytes concretos, y volver a firmar produciría dos
+        candidatos a "lo que se transmitió".
+
+        A partir de la etapa 7 lo dispara el proceso en segundo plano.
+
+        Implementa RF-17.
+      operationId: firmarDocumento
+      parameters:
+        - $ref: '#/components/parameters/DocumentoId'
+      responses:
+        '200':
+          description: El documento, ya firmado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Documento'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          $ref: '#/components/responses/ConflictoNegocio'
+
   /documentos/{id}/xml:
     post:
       tags: [Consulta]
@@ -325,6 +361,11 @@ paths:
       summary: Descargar el XML
       description: |
         Devuelve el archivo XML tal como se guardó, byte a byte.
+
+        Si el documento ya está firmado, devuelve el **firmado**: es el que
+        circula y el que la autoridad recibiría. El XML sin firmar se conserva
+        internamente para poder reproducir el cálculo de la firma, no para
+        entregarlo.
 
         Responde `409` con `XML_NO_DISPONIBLE` si aún no se ha generado.
 
