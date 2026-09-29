@@ -14,6 +14,16 @@ validaciones de negocio que ningún esquema expresa.
 
 ## 1. Qué se implementó
 
+### Firma digital (desde la etapa 6)
+
+`ext:UBLExtensions/ext:ExtensionContent` con una firma **XAdES-EPES**: tres
+referencias, política de firma de la DIAN, `SigningTime`, `SigningCertificate`,
+`SignaturePolicyIdentifier` y `SignerRole`. Los detalles y sus limitaciones
+están en [ADR-0012](adr/0012-firma-xades.md).
+
+El bloque solo aparece cuando hay firma: el esquema no admite un
+`ExtensionContent` vacío.
+
 ### Cabecera del documento
 
 | Elemento | Valor | Nota |
@@ -60,8 +70,7 @@ notas añaden `cac:BillingReference` apuntando a la factura corregida.
 
 | Elemento del estándar | Por qué se omite |
 |---|---|
-| `ext:UBLExtensions` | Es donde va la firma digital, que llega en H6. El esquema no admite un contenedor vacío, así que hasta que haya firma no se escribe el bloque. |
-| `cac:Signature` | Igual: H6. |
+| `cac:Signature` | El bloque descriptivo de UBL sobre quién firma. La firma real va en `ext:UBLExtensions`, que sí se emite desde la etapa 6. |
 | `cbc:CityName`, `cbc:CountrySubentity` | El sistema guarda el **código** de municipio, no su nombre ni el del departamento. Añadirlos exigiría incorporar el listado oficial de municipios, que es trabajo de H8 *(validar códigos contra listas oficiales)*. La DIAN los exige; hoy es una omisión conocida, no un descuido. |
 | `cac:PaymentMeans`, `cac:PaymentTerms` | La forma de pago aparece en RF-11 pero el modelo de dominio no la capturó. Es una **inconsistencia entre requisitos e implementación**, registrada en la sección 4. |
 | `cac:Delivery`, `cac:AllowanceCharge` a nivel de documento | Fuera del alcance declarado en la visión. Los descuentos existen solo a nivel de línea. |

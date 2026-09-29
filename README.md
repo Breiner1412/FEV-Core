@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 5 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: en construcción.** Hito 6 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -208,6 +208,30 @@ DIAN lo aceptaría:** el anexo técnico añade centenares de validaciones de
 negocio que ningún esquema expresa. Qué campos se implementaron y cuáles no
 está en [docs/07-cobertura-ubl.md](docs/07-cobertura-ubl.md).
 
+**9. Firma el documento** (RF-17):
+
+```bash
+curl -X POST $API/documentos/$DOC/firma -H "X-Api-Key: $LLAVE"
+curl $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE" -o factura-firmada.xml
+```
+
+Hace falta un certificado configurado en `.env` (ver `Firma__CertificadoBase64`).
+Sin él responde `409 CERTIFICADO_NO_CONFIGURADO`, y el resto del recorrido
+funciona igual: se puede levantar el proyecto entero sin tener uno.
+
+La firma va en formato **XAdES-EPES**, dentro de `ext:UBLExtensions`, con la
+política de firma que exige la DIAN. El XML descargado a partir de aquí es el
+firmado; el original se conserva internamente para poder reproducir el cálculo.
+
+Firmar no cambia el estado: el documento sigue en `EN_PROCESO`, que es
+justamente lo que ese estado significa. Repetir el `POST` responde `409`, porque
+una firma vale para unos bytes concretos.
+
+**Lo que esto no garantiza:** que la DIAN aceptaría la firma. La estructura
+sigue el anexo técnico y el documento valida contra el esquema, pero no se ha
+emitido contra el entorno de pruebas de la autoridad, y el certificado de las
+pruebas es autofirmado. Ver [ADR-0012](docs/adr/0012-firma-xades.md).
+
 Para detener: `docker compose down`
 
 ### Para desarrollar
@@ -270,6 +294,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 - **[Emisión asíncrona](docs/adr/0005-emision-asincrona.md)** — por qué la API no espera a la DIAN, y qué problema resuelve eso.
 - **[Bandeja de salida](docs/adr/0006-bandeja-de-salida.md)** — cómo se garantiza que ningún documento quede sin procesar aunque el proceso muera.
 - **[Bloqueo en la numeración](docs/adr/0009-bloqueo-numeracion.md)** — por qué una secuencia de base de datos no sirve para numeración fiscal.
+- **[Firma XAdES-EPES](docs/adr/0012-firma-xades.md)** — cómo se construye XAdES sobre lo que .NET sí trae, y los dos errores de canonicalización que costaron encontrar.
 - **[Generación del XML](docs/adr/0011-generacion-xml.md)** — por qué el UBL se escribe a mano, y qué garantiza (y qué no) validar contra el esquema oficial.
 - **[Orden de bloqueos](docs/adr/0010-orden-de-bloqueos.md)** — cómo se evita un interbloqueo por diseño, y por qué aquí el bloqueo no protege la experiencia sino la verdad del dato.
 
@@ -285,7 +310,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | H3 | Numeración correcta bajo concurrencia | Completo |
 | H4 | Notas crédito y débito, máquina de estados | Completo |
 | H5 | Generación del XML en UBL 2.1 | Completo |
-| H6 | Firma digital | Pendiente |
+| H6 | Firma digital | Completo |
 | H7 | Simulador y transmisión asíncrona | Pendiente |
 | H8 | Listados, OpenAPI generado y cierre | Pendiente |
 
