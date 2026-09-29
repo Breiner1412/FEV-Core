@@ -1,6 +1,7 @@
 using FevCore.Application.Abstracciones;
 using FevCore.Domain.Comun;
 using FevCore.Domain.Documentos;
+using FevCore.Domain.Salida;
 
 namespace FevCore.Application.Documentos;
 
@@ -21,6 +22,7 @@ public sealed class EmitirFacturaHandler(
     IRepositorioProductos repositorioProductos,
     IRepositorioRangos repositorioRangos,
     IUnidadDeTrabajo unidadDeTrabajo,
+    IRepositorioTareas tareas,
     TimeProvider reloj)
 {
     public async Task<ResultadoEmision> EjecutarAsync(
@@ -104,11 +106,22 @@ public sealed class EmitirFacturaHandler(
             consecutivo: consecutivo,
             fechaEmision: fechaEmision,
             adquirenteId: adquirente.Id,
-            emisorSnapshot: emisor.Datos,
-            adquirenteSnapshot: adquirente.Datos,
+            emisorSnapshot: emisor.Datos.Copiar(),
+            adquirenteSnapshot: adquirente.Datos.Copiar(),
             lineas: lineas);
 
         await repositorio.AgregarAsync(documento, cancelacion);
+
+        // La tarea de la bandeja entra en la MISMA transaccion que el
+        // documento (ADR-0006). Ese es todo el punto del patron: si el
+        // documento se guardara aqui y el trabajo se encolara aparte,
+        // existiria un instante en que uno de los dos podria perderse. Un
+        // documento sin tarea nunca se procesaria y nadie se enteraria; una
+        // tarea sin documento fallaria para siempre. Con los dos en la misma
+        // transaccion, o entran ambos o no entra ninguno.
+        await tareas.AgregarAsync(
+            TareaSalida.Crear(documento.Id, TipoTarea.Emitir, fechaEmision),
+            cancelacion);
 
         // Un solo SaveChanges guarda las dos cosas: el documento nuevo y el
         // contador del rango, que Entity Framework ya tiene marcado como

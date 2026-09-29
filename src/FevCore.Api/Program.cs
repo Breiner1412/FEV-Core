@@ -6,6 +6,9 @@ using FevCore.Application.Abstracciones;
 using FevCore.Application.Catalogos;
 using FevCore.Application.Documentos;
 using FevCore.Application.Numeracion;
+using FevCore.Application.Salida;
+using FevCore.Api.Salida;
+using FevCore.Infrastructure.Validacion;
 using FevCore.Domain.Documentos;
 using FevCore.Infrastructure.Persistencia;
 using FevCore.Infrastructure.Xml;
@@ -76,6 +79,7 @@ builder.Services.AddScoped<IRepositorioEmisor, RepositorioEmisor>();
 builder.Services.AddScoped<IRepositorioAdquirentes, RepositorioAdquirentes>();
 builder.Services.AddScoped<IRepositorioProductos, RepositorioProductos>();
 builder.Services.AddScoped<IRepositorioRangos, RepositorioRangos>();
+builder.Services.AddScoped<IRepositorioTareas, RepositorioTareas>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 
 builder.Services.AddScoped<EmitirFacturaHandler>();
@@ -90,6 +94,31 @@ builder.Services.AddScoped<FirmarDocumentoHandler>();
 // viva. La vigencia SI se comprueba en cada firma (INV-CER-01).
 builder.Services.AddSingleton<IProveedorCertificado, ProveedorCertificadoConfiguracion>();
 builder.Services.AddSingleton<IFirmadorXml, FirmadorXadesEpes>();
+
+// ── Bandeja de salida y transmision (ADR-0006, ADR-0007) ──
+
+builder.Services
+    .AddOptions<OpcionesSalida>()
+    .Bind(builder.Configuration.GetSection(OpcionesSalida.Seccion));
+
+builder.Services.AddScoped<ProcesadorTareas>();
+
+// HttpClient con nombre y tiempo de espera acotado.
+//
+// El tiempo de espera importa mas de lo que parece: es lo que convierte un
+// servicio que no contesta en un resultado SIN_RESPUESTA en vez de una
+// espera indefinida que bloquearia al trabajador para siempre.
+builder.Services
+    .AddHttpClient<IProveedorValidacion, ProveedorValidacionHttp>(cliente =>
+    {
+        cliente.BaseAddress = new Uri(
+            builder.Configuration["Validacion:UrlBase"] ?? "http://localhost:5108");
+
+        cliente.Timeout = TimeSpan.FromSeconds(
+            builder.Configuration.GetValue("Validacion:TiempoEsperaSegundos", 30));
+    });
+
+builder.Services.AddHostedService<TrabajadorSalida>();
 
 // El ambiente entra en el codigo unico, asi que un documento de pruebas y
 // uno de produccion con los mismos datos producen codigos distintos. Por
