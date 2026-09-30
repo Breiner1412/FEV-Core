@@ -136,4 +136,54 @@ public sealed class DineroTests
         // no rechace el documento por inconsistencia de centavos.
         Assert.Equal(10.00m, acumuladoDinero.Valor);
     }
+
+    // ── Como se escribe en un documento ──
+
+    [Theory]
+    [InlineData(0, "0.00")]
+    [InlineData(19, "19.00")]
+    [InlineData(357000, "357000.00")]
+    [InlineData(1234567.5, "1234567.50")]
+    [InlineData(0.05, "0.05")]
+    public void Un_importe_se_escribe_con_dos_decimales_y_sin_separador_de_miles(
+        decimal valor, string esperado)
+    {
+        // Sin separador de miles: "357.000,00" seria correcto en Colombia y
+        // no lo aceptaria ningun validador de XML como numero.
+        Assert.Equal(esperado, Dinero.Desde(valor).ParaDocumento());
+    }
+
+    [Fact]
+    public void El_formato_no_depende_de_la_configuracion_del_equipo()
+    {
+        var original = CultureInfo.CurrentCulture;
+
+        try
+        {
+            // Es la configuracion de la maquina donde esto correria de
+            // verdad. Con ella, un ToString sin cultura invariante daria
+            // "357000,00": el XML dejaria de ser valido y el codigo unico
+            // saldria distinto del que la DIAN recalcularia.
+            CultureInfo.CurrentCulture = new CultureInfo("es-CO");
+
+            Assert.Equal("357000.00", Dinero.Desde(357_000m).ParaDocumento());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
+    public void El_texto_del_codigo_unico_y_el_del_xml_son_el_mismo()
+    {
+        // No es una prueba sobre dos metodos: es una prueba sobre que no
+        // haya dos metodos. El codigo unico se calcula sobre el texto del
+        // importe y el XML se escribe con ese mismo texto; si fueran dos
+        // formatos que hoy coinciden, manana podrian no hacerlo y el
+        // documento seria rechazado por un motivo dificil de rastrear.
+        var importe = Dinero.Desde(1_234.5m);
+
+        Assert.Equal(importe.ParaDocumento(), importe.ToString());
+    }
 }

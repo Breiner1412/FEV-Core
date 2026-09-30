@@ -217,7 +217,7 @@ public sealed class BandejaDeSalidaTests(FabricaApiConBaseDeDatos fabrica)
             // peligroso, dos trabajadores transmitirian el mismo documento a
             // la DIAN: no dos borradores, dos facturas con el mismo
             // consecutivo.
-            Assert.Single(tomadas.Where(t => t is not null));
+            Assert.Single(tomadas, t => t is not null);
         }
         finally
         {

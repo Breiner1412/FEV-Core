@@ -4,7 +4,9 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: en construcción.** Hito 7 de 8 completado. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: completo.** Los 9 hitos entregados, 361 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
+>
+> Si vas a mirar una sola cosa, que sea la [retrospectiva](docs/10-retrospectiva.md): qué se subestimó, qué salió mejor de lo esperado y qué haría diferente.
 
 > **Limitación importante.** Este proyecto opera contra un **simulador** del servicio de validación, no contra el servicio real de la DIAN. Conectarse al servicio real exige un proceso de habilitación con certificado digital emitido por entidad autorizada. El XML se valida contra el esquema oficial, pero **no ha sido verificado contra la DIAN real**. Es un ejercicio técnico y no constituye asesoría tributaria ni legal.
 
@@ -330,6 +332,10 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | 5 | [Contrato de la API](docs/05-contrato-api.md) | Endpoints, códigos de error y guía de integración |
 | — | [Especificación OpenAPI](api/openapi.yaml) | El contrato en formato procesable |
 | 6 | [Plan de entregas](docs/06-plan-entregas.md) | Los 9 hitos y su definición de terminado |
+| 7 | [Cobertura UBL](docs/07-cobertura-ubl.md) | Qué elementos del anexo técnico se generan y cuáles no |
+| 8 | [Guía de despliegue](docs/08-despliegue.md) | Variables de entorno, secretos y qué falta para un despliegue real |
+| 9 | [Trazabilidad](docs/09-trazabilidad.md) | Cada requerimiento con su implementación y su prueba, y los tres que no tienen |
+| 10 | [Retrospectiva](docs/10-retrospectiva.md) | Qué se subestimó, qué salió mejor de lo esperado y qué haría diferente |
 
 ### Decisiones que vale la pena mirar
 
@@ -356,7 +362,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | H5 | Generación del XML en UBL 2.1 | Completo |
 | H6 | Firma digital | Completo |
 | H7 | Simulador y transmisión asíncrona | Completo |
-| H8 | Listados, OpenAPI generado y cierre | Pendiente |
+| H8 | Listados, OpenAPI generado y cierre | Completo |
 
 ---
 

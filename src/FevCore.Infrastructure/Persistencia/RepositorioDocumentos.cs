@@ -14,6 +14,92 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
         contexto.Documentos
             .FirstOrDefaultAsync(d => d.Id == id, cancelacion);
 
+    /// <summary>
+    /// Pagina de documentos del integrador (RF-24).
+    ///
+    /// Las fechas del filtro son fechas civiles colombianas, no instantes en
+    /// UTC. Un documento emitido a las 20:00 del 5 de marzo en Pereira son
+    /// las 01:00 del 6 en UTC: filtrar por UTC lo dejaria fuera de una
+    /// busqueda del dia 5, y para quien emitio esa factura ese dia fue el 5.
+    /// Colombia no aplica horario de verano, asi que el desfase es fijo y la
+    /// conversion no necesita una base de datos de zonas horarias.
+    ///
+    /// Hasta es INCLUSIVE, como dice el contrato, y por eso se compara contra
+    /// el principio del dia siguiente en vez de contra el final del mismo:
+    /// un documento de las 23:59:59.7 no se escapa por las decimas.
+    /// </summary>
+    public async Task<PaginaDe<ResumenDocumento>> ListarAsync(
+        FiltroDocumentos filtro,
+        CancellationToken cancelacion = default)
+    {
+        var consulta = contexto.Documentos.AsNoTracking();
+
+        if (filtro.IntegradorId is { } integradorId)
+        {
+            consulta = consulta.Where(d => d.IntegradorId == integradorId);
+        }
+
+        if (filtro.Tipo is { } tipo)
+        {
+            consulta = consulta.Where(d => d.Tipo == tipo);
+        }
+
+        if (filtro.Estado is { } estado)
+        {
+            consulta = consulta.Where(d => d.Estado == estado);
+        }
+
+        if (filtro.Desde is { } desde)
+        {
+            // ToUniversalTime no cambia el instante, solo como se escribe.
+            // Hace falta porque la columna es timestamptz y Npgsql exige que
+            // el parametro lleve desfase cero: pasarle uno en -05:00 lanza.
+            var inicio = new DateTimeOffset(
+                desde.ToDateTime(TimeOnly.MinValue),
+                ValoresCufe.ZonaColombia).ToUniversalTime();
+
+            consulta = consulta.Where(d => d.FechaEmision >= inicio);
+        }
+
+        if (filtro.Hasta is { } hasta)
+        {
+            var finExclusivo = new DateTimeOffset(
+                hasta.AddDays(1).ToDateTime(TimeOnly.MinValue),
+                ValoresCufe.ZonaColombia).ToUniversalTime();
+
+            consulta = consulta.Where(d => d.FechaEmision < finExclusivo);
+        }
+
+        // Se cuenta antes de paginar y sobre la MISMA consulta filtrada: el
+        // total que se devuelve tiene que ser el de los resultados del
+        // filtro, no el de la tabla.
+        var total = await consulta.LongCountAsync(cancelacion);
+
+        // Del mas reciente al mas antiguo, y con el identificador como
+        // desempate. Sin el, dos documentos del mismo instante podrian
+        // repartirse entre dos paginas o aparecer dos veces: PostgreSQL no
+        // promete un orden estable para las filas empatadas.
+        var elementos = await consulta
+            .OrderByDescending(d => d.FechaEmision)
+            .ThenByDescending(d => d.Id)
+            .Skip((filtro.Pagina - 1) * filtro.TamanoPagina)
+            .Take(filtro.TamanoPagina)
+            .Select(d => new ResumenDocumento(
+                d.Id,
+                d.Tipo,
+                d.Estado,
+                d.Prefijo,
+                d.Consecutivo,
+                d.FechaEmision,
+                d.AdquirenteSnapshot.RazonSocial,
+                d.Totales.TotalAPagar,
+                d.CodigoUnico))
+            .ToListAsync(cancelacion);
+
+        return new PaginaDe<ResumenDocumento>(
+            elementos, filtro.Pagina, filtro.TamanoPagina, total);
+    }
+
     public Task<Documento?> BuscarPorReferenciaExternaAsync(
         Guid integradorId,
         string referenciaExterna,
