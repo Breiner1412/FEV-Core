@@ -114,4 +114,28 @@ Tres proyectos: `Domain.Tests`, `Application.Tests`, `Integration.Tests`
 
 ## Estado
 
-Hitos H0 a H3 completos y fusionados en `main`. H4 en curso en `hito/4-reglas`.
+**Proyecto completo.** Los 9 hitos (H0 a H8) entregados y fusionados en `main`.
+361 pruebas en verde, 14 ADR.
+
+No hay trabajo en curso. Cualquier cambio nuevo empieza por decidir si cabe en
+el alcance declarado en `docs/01-vision-alcance.md`, y si no cabe, por ampliarlo
+ahi primero.
+
+### Antes de proponer nada, leer esto
+
+- `docs/10-retrospectiva.md` — que se subestimo, que salio mejor de lo esperado
+  y que se haria diferente. Es el resumen mas honesto del proyecto.
+- `docs/09-trazabilidad.md` — cada requerimiento con su prueba, y los **tres que
+  no tienen verificacion automatica**: RF-04 (el certificado entra por
+  configuracion y no por un endpoint, a proposito), RNF-03 (el percentil 95
+  nunca se ha medido) y RNF-08 (levantar con un comando se comprueba a mano).
+- `docs/08-despliegue.md`, seccion 6 — que falta para un despliegue real.
+
+### Lo que NO esta hecho, y es deliberado
+
+- Todo corre contra un **simulador**. No se ha emitido nada ante la DIAN.
+- El protocolo real es SOAP; solo existe la implementacion REST del simulador.
+- Los codigos de municipio y unidad de medida no se validan contra las listas
+  oficiales: se comprueba que vengan, no que existan.
+- `FALLIDO` exige intervencion humana y no hay herramienta para ella.
+- Un solo emisor. El modelo no lo impide, pero no esta implementado ni probado.
