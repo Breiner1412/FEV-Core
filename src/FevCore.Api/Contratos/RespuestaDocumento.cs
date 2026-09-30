@@ -1,3 +1,4 @@
+using FevCore.Application.Abstracciones;
 using FevCore.Domain.Documentos;
 
 namespace FevCore.Api.Contratos;
@@ -146,5 +147,36 @@ public sealed record RespuestaTotales
         TotalBaseImponible = totales.TotalBaseImponible.Valor,
         TotalImpuestos = totales.TotalImpuestos.Valor,
         TotalAPagar = totales.TotalAPagar.Valor
+    };
+}
+
+/// <summary>
+/// Un documento en un listado (RF-24).
+///
+/// Lleva menos campos que RespuestaDocumento, y eso es una promesa del
+/// contrato, no una casualidad de la implementacion: quien liste y luego
+/// necesite el detalle tiene que consultar el documento.
+/// </summary>
+public sealed record RespuestaDocumentoResumen
+{
+    public required Guid Id { get; init; }
+    public required TipoDocumento Tipo { get; init; }
+    public required EstadoDocumento Estado { get; init; }
+    public required string NumeroCompleto { get; init; }
+    public required DateTimeOffset FechaEmision { get; init; }
+    public required string AdquirenteRazonSocial { get; init; }
+    public required decimal TotalAPagar { get; init; }
+    public string? CodigoUnico { get; init; }
+
+    public static RespuestaDocumentoResumen Desde(ResumenDocumento resumen) => new()
+    {
+        Id = resumen.Id,
+        Tipo = resumen.Tipo,
+        Estado = resumen.Estado,
+        NumeroCompleto = resumen.NumeroCompleto,
+        FechaEmision = resumen.FechaEmision,
+        AdquirenteRazonSocial = resumen.AdquirenteRazonSocial,
+        TotalAPagar = resumen.TotalAPagar.Valor,
+        CodigoUnico = resumen.CodigoUnico
     };
 }

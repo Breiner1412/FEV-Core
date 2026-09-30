@@ -84,6 +84,7 @@ builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 
 builder.Services.AddScoped<EmitirFacturaHandler>();
 builder.Services.AddScoped<ConsultarDocumentoHandler>();
+builder.Services.AddScoped<ListarDocumentosHandler>();
 builder.Services.AddScoped<EmitirNotaHandler>();
 builder.Services.AddScoped<TransicionarDocumentoHandler>();
 builder.Services.AddScoped<GenerarXmlHandler>();
@@ -158,7 +159,11 @@ var app = builder.Build();
 // Primero, para que cualquier error posterior salga en formato Problem Details.
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+// Misma lista blanca de entornos que el resto de lo que no existe en
+// produccion, y no IsDevelopment: asi el documento generado tambien se sirve
+// bajo Testing, que es lo que permite contrastarlo contra el escrito a mano
+// dentro de una prueba en vez de a ojo (RNF-07).
+if (EndpointsDesarrollo.EstaPermitidoEn(app.Environment))
 {
     app.MapOpenApi().AllowAnonymous();
 }
