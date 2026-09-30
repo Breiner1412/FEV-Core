@@ -237,6 +237,46 @@ public sealed class CicloCompletoTests(FabricaApiConBaseDeDatos fabrica)
         Assert.Equal(1, fabrica.Validacion.TransmisionesIntentadas);
     }
 
+    // ── CE-04 y RN-13: un fallo no previsto tampoco deja el documento a medias ──
+
+    /// <summary>
+    /// Una excepcion que nadie previo, lanzada con el documento EN_PROCESO.
+    ///
+    /// Antes de esta prueba el procesador agotaba la tarea y dejaba el
+    /// documento donde estaba: sin trabajo pendiente y sin estado final. Nada
+    /// lo volvia a mover, y la API seguia diciendo "en proceso" para siempre.
+    /// </summary>
+    [Fact]
+    public async Task Un_fallo_no_previsto_al_transmitir_agota_los_intentos_y_deja_el_documento_fallido()
+    {
+        fabrica.Validacion.Reiniciar();
+        fabrica.Validacion.Modo = ModoValidacion.FallaAlTransmitir;
+
+        var (cliente, id) = await EmitirConServicioCaido();
+
+        await fabrica.ProcesarTodoAsync();
+
+        Assert.Equal("FALLIDO", await Estado(cliente, id));
+        Assert.Equal(3, fabrica.Validacion.TransmisionesIntentadas);
+    }
+
+    /// <summary>
+    /// Lo mismo con el documento ya TRANSMITIDO, en la tarea de consulta.
+    /// </summary>
+    [Fact]
+    public async Task Un_fallo_no_previsto_al_consultar_agota_los_intentos_y_deja_el_documento_fallido()
+    {
+        fabrica.Validacion.Reiniciar();
+        fabrica.Validacion.Modo = ModoValidacion.FallaAlConsultar;
+
+        var (cliente, id) = await EmitirConServicioCaido();
+
+        await fabrica.ProcesarTodoAsync();
+
+        Assert.Equal("FALLIDO", await Estado(cliente, id));
+        Assert.Equal(3, fabrica.Validacion.ConsultasRealizadas);
+    }
+
     // ── RNF-05: consultar hasta tener veredicto ──
 
     [Fact]

@@ -19,7 +19,16 @@ public enum ModoValidacion
     SinRespuesta,
 
     /// <summary>Rechaza la entrega misma. Reintentar no serviria.</summary>
-    ErrorDefinitivo
+    ErrorDefinitivo,
+
+    /// <summary>
+    /// Lanza una excepcion que nadie previo al transmitir. Simula un error
+    /// de programacion o de un adaptador, no una respuesta de la autoridad.
+    /// </summary>
+    FallaAlTransmitir,
+
+    /// <summary>Acepta la entrega y lanza una excepcion no prevista al consultar.</summary>
+    FallaAlConsultar
 }
 
 /// <summary>
@@ -69,6 +78,11 @@ public sealed class ProveedorValidacionSimulado : IProveedorValidacion
     {
         TransmisionesIntentadas++;
 
+        if (Modo == ModoValidacion.FallaAlTransmitir)
+        {
+            throw new InvalidOperationException("Fallo no previsto al transmitir.");
+        }
+
         return Task.FromResult(Modo switch
         {
             ModoValidacion.Caido => new ResultadoEnvio(
@@ -108,6 +122,11 @@ public sealed class ProveedorValidacionSimulado : IProveedorValidacion
         CancellationToken cancelacion = default)
     {
         ConsultasRealizadas++;
+
+        if (Modo == ModoValidacion.FallaAlConsultar)
+        {
+            throw new InvalidOperationException("Fallo no previsto al consultar.");
+        }
 
         if (Modo == ModoValidacion.Caido || Modo == ModoValidacion.SinRespuesta)
         {

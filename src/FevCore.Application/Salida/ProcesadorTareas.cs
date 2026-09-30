@@ -41,29 +41,37 @@ public sealed class ProcesadorTareas(
             return false;
         }
 
+        // Fuera del try a proposito: el catch necesita el documento.
+        var documento = await documentos.ObtenerPorIdAsync(tarea.DocumentoId, cancelacion);
+
         try
         {
-            await ProcesarAsync(tarea, cancelacion);
+            await ProcesarAsync(tarea, documento, cancelacion);
         }
         catch (Exception error)
         {
             // Un fallo inesperado NO puede dejar la tarea tomada para
             // siempre: se devuelve a la bandeja o se agota, segun queden
-            // intentos. Sin este catch, un error de programacion congelaria
-            // el documento hasta que alguien mirara la base de datos.
+            // intentos.
+            //
+            // Y al agotarse tiene que llevarse el documento a FALLIDO. Sin el
+            // documento, la tarea se cerraba y el documento se quedaba en
+            // EN_PROCESO o TRANSMITIDO, sin trabajo pendiente y sin estado
+            // final: exactamente el estado indeterminado que CE-04 prohibe.
             registrador.LogError(
                 error, "Fallo inesperado procesando la tarea {Tarea}.", tarea.Id);
 
-            await RendirseOReprogramar(tarea, error.Message, cancelacion);
+            await RendirseOReprogramar(tarea, error.Message, cancelacion, documento);
         }
 
         return true;
     }
 
-    private async Task ProcesarAsync(TareaSalida tarea, CancellationToken cancelacion)
+    private async Task ProcesarAsync(
+        TareaSalida tarea,
+        Documento? documento,
+        CancellationToken cancelacion)
     {
-        var documento = await documentos.ObtenerPorIdAsync(tarea.DocumentoId, cancelacion);
-
         if (documento is null)
         {
             tarea.Agotar("El documento ya no existe.", reloj.GetUtcNow());
@@ -236,10 +244,21 @@ public sealed class ProcesadorTareas(
         {
             tarea.Agotar(error, momento);
 
-            if (documento is not null && !MaquinaEstados.EsTerminal(documento.Estado))
+            if (documento is not null &&
+                MaquinaEstados.Permite(documento.Estado, EstadoDocumento.Fallido))
             {
                 documento.RegistrarFallo(
                     $"Se agotaron los {_opciones.MaximoIntentos} intentos.", momento);
+            }
+            else if (documento is not null && !MaquinaEstados.EsTerminal(documento.Estado))
+            {
+                // La seccion 6.2 no tiene transicion de RECIBIDO a FALLIDO, asi
+                // que un documento que fallo antes de generar su XML se queda
+                // donde esta. No se oculta: queda escrito para quien revise.
+                registrador.LogError(
+                    "Documento {Documento} sin estado final: se agotaron los intentos " +
+                    "en {Estado}, desde donde la maquina de estados no permite FALLIDO.",
+                    documento.Id, documento.Estado);
             }
 
             registrador.LogWarning(

@@ -177,15 +177,23 @@ public sealed class ProveedorValidacionHttpTests
         Assert.Contains("FAD06: NIT invalido", resultado.Errores);
     }
 
-    [Fact]
-    public async Task Un_rechazo_sin_detalle_no_deja_la_lista_vacia()
+    /// <summary>
+    /// RF-21: el dominio no acepta un rechazo sin errores, asi que el
+    /// adaptador nunca debe entregarle uno. Da igual que la autoridad omita
+    /// el campo, lo mande vacio o lo mande con textos en blanco.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"veredicto":"RECHAZADO"}""")]
+    [InlineData("""{"veredicto":"RECHAZADO","errores":[]}""")]
+    [InlineData("""{"veredicto":"RECHAZADO","errores":["  "]}""")]
+    public async Task Un_rechazo_sin_detalle_no_deja_la_lista_vacia(string cuerpo)
     {
-        var proveedor = ConRespuesta(HttpStatusCode.OK, """{"veredicto":"RECHAZADO"}""");
+        var proveedor = ConRespuesta(HttpStatusCode.OK, cuerpo);
 
         var resultado = await proveedor.ConsultarAsync("SEG-001");
 
         Assert.Equal(VeredictoAutoridad.Rechazado, resultado.Veredicto);
-        Assert.NotEmpty(resultado.Errores);
+        Assert.Contains(resultado.Errores, e => !string.IsNullOrWhiteSpace(e));
     }
 
     [Fact]

@@ -113,7 +113,7 @@ public sealed class ProveedorValidacionHttp(
                 "APROBADO" => new ResultadoConsulta(VeredictoAutoridad.Aprobado, [], cuerpo),
                 "RECHAZADO" => new ResultadoConsulta(
                     VeredictoAutoridad.Rechazado,
-                    veredicto.Errores ?? ["La autoridad rechazo el documento sin detallar."],
+                    ErroresDeRechazo(veredicto.Errores),
                     cuerpo),
                 "EN_PROCESO" => new ResultadoConsulta(VeredictoAutoridad.EnProceso, [], cuerpo),
                 _ => ResultadoConsulta.NoDisponible(cuerpo)
@@ -152,6 +152,26 @@ public sealed class ProveedorValidacionHttp(
 
         _ => ResultadoTransmision.ErrorTransitorio
     };
+
+    /// <summary>
+    /// Los errores de un rechazo, nunca vacios.
+    ///
+    /// El dominio no acepta un rechazo sin errores (RF-21), y con razon. Pero
+    /// si la autoridad omite el campo, lo manda vacio o lo manda con textos
+    /// en blanco, el rechazo sigue siendo un rechazo: se registra como tal y
+    /// se dice que no vino detalle, en vez de lanzar y dejar el documento sin
+    /// veredicto.
+    /// </summary>
+    private static IReadOnlyList<string> ErroresDeRechazo(string[]? errores)
+    {
+        var conTexto = (errores ?? [])
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .ToList();
+
+        return conTexto.Count > 0
+            ? conTexto
+            : ["La autoridad rechazo el documento sin detallar."];
+    }
 
     private sealed record CuerpoTransmision(string? IdentificadorSeguimiento);
     private sealed record CuerpoVeredicto(string? Veredicto, string[]? Errores);
