@@ -162,6 +162,81 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 | `ESTADO_NO_PERMITE_FIRMAR` | 409 | Solo se firma un documento en `EN_PROCESO`. |
 | `VALIDACION` | 400 | Error de forma. El campo `errores` detalla qué falló y dónde. |
 
+### 4.6 Datos de las partes
+
+Aplican al configurar el emisor y al registrar o modificar un adquirente. También al emitir, porque el documento guarda una copia de estos datos *(RN-10)*.
+
+| Código | Estado | Significado |
+|---|---|---|
+| `TIPO_IDENTIFICACION_REQUERIDO` | 409 | Falta el tipo de identificación. |
+| `IDENTIFICACION_REQUERIDA` | 409 | Falta el número de identificación. |
+| `RAZON_SOCIAL_REQUERIDA` | 409 | Falta la razón social o el nombre. |
+| `DIRECCION_REQUERIDA` | 409 | Falta la dirección. |
+| `MUNICIPIO_REQUERIDO` | 409 | Falta el código de municipio. |
+| `REGIMEN_REQUERIDO` | 409 | Falta el régimen tributario. |
+| `NIT_INVALIDO` | 409 | El NIT tiene caracteres no numéricos o excede la longitud máxima. |
+| `DIGITO_VERIFICACION_REQUERIDO` | 409 | Un NIT debe venir con su dígito de verificación. *(INV-EMI-01)* |
+| `DIGITO_VERIFICACION_INCORRECTO` | 409 | El dígito no corresponde al NIT. El mensaje dice cuál debería ser. *(INV-EMI-01)* |
+| `CORREO_INVALIDO` | 409 | El correo no tiene forma de dirección electrónica. |
+| `EMISOR_SIN_RESPONSABILIDADES` | 409 | El emisor debe declarar al menos una responsabilidad fiscal. |
+| `EMISOR_NO_CONFIGURADO` | 409 | No se ha configurado el emisor. No se puede emitir nada. *(RF-05)* |
+
+### 4.7 Líneas del documento
+
+| Código | Estado | Significado |
+|---|---|---|
+| `DOCUMENTO_SIN_LINEAS` | 409 | Un documento necesita al menos una línea. *(INV-DOC-02)* |
+| `LINEA_NUMERO_INVALIDO` | 409 | El número de línea debe ser mayor que cero. |
+| `LINEAS_CON_NUMERO_REPETIDO` | 409 | Dos líneas comparten el mismo número. |
+| `LINEA_CODIGO_REQUERIDO` | 409 | Falta el código del ítem. |
+| `LINEA_DESCRIPCION_REQUERIDA` | 409 | Falta la descripción del ítem. |
+| `LINEA_UNIDAD_REQUERIDA` | 409 | Falta la unidad de medida. |
+| `LINEA_CANTIDAD_INVALIDA` | 409 | La cantidad debe ser mayor que cero. |
+| `LINEA_PRECIO_INVALIDO` | 409 | El precio unitario no puede ser negativo. |
+| `LINEA_DESCUENTO_EXCESIVO` | 409 | El descuento supera el valor de la línea. |
+| `LINEA_IMPUESTO_DUPLICADO` | 409 | La línea declara dos veces el mismo tipo de impuesto. |
+| `IMPUESTO_TARIFA_INVALIDA` | 409 | La tarifa está fuera del rango admitido. |
+
+### 4.8 Catálogo de productos
+
+Aplican al crear o modificar un producto.
+
+| Código | Estado | Significado |
+|---|---|---|
+| `PRODUCTO_CODIGO_REQUERIDO` | 409 | Falta el código del producto. |
+| `PRODUCTO_DESCRIPCION_REQUERIDA` | 409 | Falta la descripción. |
+| `PRODUCTO_UNIDAD_REQUERIDA` | 409 | Falta la unidad de medida. |
+| `PRODUCTO_IMPUESTO_DUPLICADO` | 409 | El producto declara dos veces el mismo tipo de impuesto. |
+
+### 4.9 Emisión, consulta y transporte
+
+| Código | Estado | Significado |
+|---|---|---|
+| `REFERENCIA_EXTERNA_REQUERIDA` | 409 | Falta la referencia del sistema integrador. *(RF-15)* |
+| `ADQUIRENTE_REQUERIDO` | 409 | Falta el adquirente. |
+| `MONEDA_REQUERIDA` | 409 | Falta la moneda del documento. |
+| `PREFIJO_REQUERIDO` | 409 | El documento se emitió sin prefijo. |
+| `CONSECUTIVO_INVALIDO` | 409 | El consecutivo asignado no es válido. |
+| `CLAVE_TECNICA_REQUERIDA` | 409 | El rango que numeró el documento no tiene clave técnica. Sin ella no se calcula el código único. |
+| `DOCUMENTO_NO_ENCONTRADO` | 404 | No existe un documento con ese identificador. |
+| `PARAMETRO_INVALIDO` | 400 | Un parámetro de consulta tiene un valor que no se reconoce. El mensaje lista los aceptados. |
+| `ERROR_INTERNO` | 500 | Fallo no previsto. El `traceId` de la respuesta es lo que permite localizarlo en los registros. |
+
+### 4.10 Administración de integradores
+
+| Código | Estado | Significado |
+|---|---|---|
+| `INTEGRADOR_NOMBRE_REQUERIDO` | 409 | Falta el nombre del sistema integrador. |
+| `INTEGRADOR_LLAVE_DEBIL` | 409 | La llave propuesta no alcanza la longitud mínima. |
+
+### 4.11 Códigos que un integrador no debería ver nunca
+
+El dominio protege invariantes que solo puede romper un error de programación, no una petición mal formada. Si alguno de estos llega a una respuesta, es un fallo del sistema y no de quien lo llamó:
+
+`CODIGO_UNICO_VACIO`, `XML_VACIO`, `TRANSMISION_SIN_SEGUIMIENTO`, `RECHAZO_SIN_ERRORES`, `TAREA_SIN_DOCUMENTO`, `TAREA_COMPLETADA`, `INTEGRADOR_REQUERIDO`.
+
+Se documentan porque aparecen en el código y porque verlos en producción es información: significa que algo llegó a un estado que se creía imposible. La respuesta correcta ante uno de ellos es abrir un reporte, no corregir la petición.
+
 ---
 
 ## 5. Guía de integración
