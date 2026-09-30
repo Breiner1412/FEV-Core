@@ -280,9 +280,11 @@ public sealed class ProcesadorTareas(
             }
             else if (documento is not null && !MaquinaEstados.EsTerminal(documento.Estado))
             {
-                // La seccion 6.2 no tiene transicion de RECIBIDO a FALLIDO, asi
-                // que un documento que fallo antes de generar su XML se queda
-                // donde esta. No se oculta: queda escrito para quien revise.
+                // La seccion 6.2 no tiene transicion de RECIBIDO a FALLIDO.
+                // Desde que el proceso se inicia antes de generar el XML, solo
+                // llega aqui un documento que fallo antes incluso de eso, al
+                // guardar su paso a EN_PROCESO. No se oculta: queda escrito
+                // para quien revise.
                 registrador.LogError(
                     "Documento {Documento} sin estado final: se agotaron los intentos " +
                     "en {Estado}, desde donde la maquina de estados no permite FALLIDO.",
