@@ -41,11 +41,39 @@ public sealed class ProcesadorTareas(
             return false;
         }
 
-        // Fuera del try a proposito: el catch necesita el documento.
-        var documento = await documentos.ObtenerPorIdAsync(tarea.DocumentoId, cancelacion);
+        // Declarado fuera del try porque el catch necesita el documento, y
+        // cargado DENTRO porque cargarlo tambien puede fallar. Fuera del try,
+        // un documento que no se puede leer dejaba escapar la excepcion sin
+        // gastar ningun intento, y la tarea se reintentaba para siempre.
+        Documento? documento = null;
 
         try
         {
+            documento = await documentos.ObtenerPorIdAsync(tarea.DocumentoId, cancelacion);
+
+            // Tope que no depende de llegar a rendirse (RNF-05).
+            //
+            // El maximo se comprueba al decidir si reprogramar o rendirse. Si
+            // un fallo escapa sin pasar por ahi —por ejemplo, porque guardar
+            // la propia reprogramacion falla—, la tarea se recupera por
+            // abandono y se vuelve a tomar, y Tomar suma un intento cada vez.
+            // Una tarea con mas intentos que el maximo es una a la que
+            // ninguna vuelta anterior logro cerrar: se cierra aqui.
+            if (tarea.AgotoIntentos(_opciones.MaximoIntentos + 1))
+            {
+                registrador.LogError(
+                    "Tarea {Tarea} tomada {Intentos} veces sin que ningun intento la cerrara.",
+                    tarea.Id, tarea.Intentos);
+
+                await RendirseOReprogramar(
+                    tarea,
+                    "Ningun intento anterior llego a cerrar la tarea.",
+                    cancelacion,
+                    documento);
+
+                return true;
+            }
+
             await ProcesarAsync(tarea, documento, cancelacion);
         }
         catch (Exception error)

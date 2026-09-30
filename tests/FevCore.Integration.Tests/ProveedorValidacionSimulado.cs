@@ -28,7 +28,13 @@ public enum ModoValidacion
     FallaAlTransmitir,
 
     /// <summary>Acepta la entrega y lanza una excepcion no prevista al consultar.</summary>
-    FallaAlConsultar
+    FallaAlConsultar,
+
+    /// <summary>
+    /// Acepta con un identificador de seguimiento mas largo que su columna.
+    /// Guardar la transmision falla siempre, en cada intento.
+    /// </summary>
+    SeguimientoDemasiadoLargo
 }
 
 /// <summary>
@@ -92,6 +98,11 @@ public sealed class ProveedorValidacionSimulado : IProveedorValidacion
             ModoValidacion.SinRespuesta => Registrar(numeroDocumento, new ResultadoEnvio(
                 ResultadoTransmision.SinRespuesta,
                 RespuestaCruda: "Tiempo de espera agotado sin respuesta.")),
+
+            ModoValidacion.SeguimientoDemasiadoLargo => Registrar(numeroDocumento, new ResultadoEnvio(
+                ResultadoTransmision.Aceptada,
+                new string('X', 150),
+                "Aceptado.")),
 
             ModoValidacion.ErrorDefinitivo => new ResultadoEnvio(
                 ResultadoTransmision.ErrorDefinitivo,
