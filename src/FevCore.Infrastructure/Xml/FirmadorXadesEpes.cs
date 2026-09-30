@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
 using System.Xml;
 using FevCore.Application.Abstracciones;
+using FevCore.Domain.Documentos;
 
 namespace FevCore.Infrastructure.Xml;
 
@@ -259,7 +260,7 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
 
         // Hora en la zona de Colombia, como el resto del documento.
         var instante = momento
-            .ToOffset(TimeSpan.FromHours(-5))
+            .ToOffset(ValoresCufe.ZonaColombia)
             .ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture);
 
         var texto = $"""

@@ -360,7 +360,7 @@ public sealed class GeneradorXmlUbl(AmbienteDian ambiente) : IGeneradorXml
     private static XElement Importe(XName nombre, Dinero valor, string moneda) =>
         new(nombre,
             new XAttribute("currencyID", moneda),
-            valor.Valor.ToString("F2", CultureInfo.InvariantCulture));
+            valor.ParaDocumento());
 
     /// <summary>
     /// Cultura invariante siempre. Con configuracion colombiana, 19 saldria

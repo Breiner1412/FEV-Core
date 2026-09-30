@@ -86,13 +86,11 @@ public sealed record ValoresCufe
     }
 
     /// <summary>
-    /// Dos decimales, punto como separador y sin separador de miles. La
-    /// cultura invariante no es opcional: en un equipo con configuracion
-    /// colombiana, "357000.00" saldria como "357000,00" y el codigo seria
-    /// otro.
+    /// El formato vive en Dinero, no aqui. Es el MISMO texto con el que se
+    /// escribe el XML, y tiene que serlo: la autoridad recalcula el codigo
+    /// leyendo el XML.
     /// </summary>
-    private static string Importe(Dinero valor) =>
-        valor.Valor.ToString("F2", CultureInfo.InvariantCulture);
+    private static string Importe(Dinero valor) => valor.ParaDocumento();
 
     private static Dinero SumarImpuesto(Documento documento, TipoImpuesto tipo) =>
         documento.Lineas

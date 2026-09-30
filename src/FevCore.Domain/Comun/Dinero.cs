@@ -89,6 +89,22 @@ public readonly record struct Dinero : IComparable<Dinero>
 
     public int CompareTo(Dinero otro) => Valor.CompareTo(otro.Valor);
 
-    public override string ToString() =>
+    /// <summary>
+    /// Como se escribe un importe en un documento electronico.
+    ///
+    /// Dos decimales siempre, punto como separador decimal y sin separador
+    /// de miles. La cultura invariante no es un detalle: en un equipo con
+    /// configuracion colombiana "357000.00" saldria "357000,00" y ningun
+    /// validador lo aceptaria como numero.
+    ///
+    /// Existe como un unico metodo porque el codigo unico se calcula sobre
+    /// ESTE texto y el XML se escribe con ESTE texto. Si fueran dos formatos
+    /// distintos que hoy coinciden, bastaria que alguien tocara uno para que
+    /// la DIAN recalculara el codigo desde el XML y obtuviera otro. El
+    /// documento se rechazaria, y el error no se pareceria a su causa.
+    /// </summary>
+    public string ParaDocumento() =>
         Valor.ToString("0.00", CultureInfo.InvariantCulture);
+
+    public override string ToString() => ParaDocumento();
 }
