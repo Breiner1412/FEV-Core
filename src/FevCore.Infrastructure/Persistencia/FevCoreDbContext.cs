@@ -27,6 +27,23 @@ public sealed class FevCoreDbContext(DbContextOptions<FevCoreDbContext> opciones
     public DbSet<RangoNumeracion> RangosNumeracion => Set<RangoNumeracion>();
     public DbSet<TareaSalida> TareasSalida => Set<TareaSalida>();
 
+    /// <summary>
+    /// Todo instante se guarda en UTC.
+    ///
+    /// Las columnas timestamptz de PostgreSQL solo aceptan un DateTimeOffset
+    /// con desfase cero: Npgsql rechaza cualquier otro. El dominio, en
+    /// cambio, recibe instantes con el desfase que traigan —un integrador
+    /// colombiano manda -05:00, como el ejemplo del contrato— y no tiene por
+    /// que saber de esa restriccion (ADR-0004). Convertir no cambia el
+    /// instante, solo como se escribe; la hora colombiana del XML se calcula
+    /// al generarlo, no se lee de aqui.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configuracion)
+    {
+        configuracion.Properties<DateTimeOffset>()
+            .HaveConversion<ConvertidorInstanteUtc>();
+    }
+
     protected override void OnModelCreating(ModelBuilder constructor)
     {
         // Toda la configuracion del mapeo vive en esta carpeta, no en las

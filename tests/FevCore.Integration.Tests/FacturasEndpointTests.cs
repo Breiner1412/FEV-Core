@@ -473,4 +473,39 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
 
         Assert.True(respuesta.Headers.Contains("X-Trace-Id"));
     }
+
+    // ── La fecha de emision tal como la manda un integrador colombiano ──
+
+    /// <summary>
+    /// El ejemplo del propio contrato manda la fecha con desfase -05:00, y
+    /// respondia 500: PostgreSQL solo acepta instantes con desfase cero en
+    /// una columna timestamptz. Ninguna prueba enviaba fechaEmision, asi que
+    /// el ejemplo documentado nunca se habia ejecutado (RF-11, RNF-11).
+    /// </summary>
+    [Fact]
+    public async Task Una_fecha_de_emision_con_desfase_colombiano_se_acepta_y_conserva_el_instante()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
+
+        var enColombia = new DateTimeOffset(
+            DateTime.SpecifyKind(DateTime.UtcNow.AddHours(-5).Date.AddHours(10), DateTimeKind.Unspecified),
+            TimeSpan.FromHours(-5));
+
+        var respuesta = await cliente.PostAsJsonAsync(RutaFacturas, new
+        {
+            referenciaExterna = Referencia(),
+            adquirenteId = adquirente,
+            fechaEmision = enColombia,
+            lineas = new[] { new { productoId = producto, cantidad = 1m } }
+        });
+
+        Assert.Equal(HttpStatusCode.Accepted, respuesta.StatusCode);
+
+        var fecha = (await LeerJson(respuesta)).GetProperty("fechaEmision").GetDateTimeOffset();
+
+        Assert.Equal(enColombia.UtcDateTime, fecha.UtcDateTime);
+    }
 }
