@@ -407,16 +407,34 @@ public sealed class Documento
     }
 
     /// <summary>
-    /// Guarda el XML generado y su codigo unico, y avanza a EnProceso.
+    /// Empieza el procesamiento: el documento pasa a EnProceso ANTES de
+    /// generar su XML.
     ///
-    /// Los tres efectos van juntos a proposito: un documento con XML pero en
-    /// estado Recibido, o en EnProceso sin XML, serian estados que no
-    /// significan nada.
+    /// Es lo que la seccion 6.1 dice que significa EN_PROCESO: "se esta
+    /// generando o firmando el XML". Y es lo unico que da salida a un fallo
+    /// al generar, porque la seccion 6.2 solo lleva a FALLIDO desde
+    /// EN_PROCESO. Ver la nota de RegistrarXmlGenerado.
     /// </summary>
-    public void RegistrarXmlGenerado(
-        string xml,
-        string codigoUnico,
-        DateTimeOffset momento)
+    public void IniciarProceso(DateTimeOffset momento) =>
+        Transicionar(EstadoDocumento.EnProceso, "Inicia la generacion del XML.", momento);
+
+    /// <summary>
+    /// Guarda el XML generado y su codigo unico.
+    ///
+    /// Hasta la auditoria final este metodo tambien avanzaba el documento a
+    /// EnProceso, los tres efectos juntos. La razon era evitar un documento
+    /// en EnProceso sin XML, que parecia un estado sin significado. El
+    /// razonamiento estaba equivocado por dos lados: la seccion 6.1 define
+    /// EN_PROCESO precisamente como "se esta generando", o sea, todavia sin
+    /// XML; y al transicionar solo despues de generar con exito, un fallo al
+    /// generar dejaba el documento en RECIBIDO, desde donde la maquina de
+    /// estados no permite FALLIDO. Evitaba un estado que si significa algo a
+    /// cambio de dejar documentos sin salida.
+    ///
+    /// Ahora la transicion la hace IniciarProceso, antes de generar, y aqui
+    /// solo se exige que ya haya ocurrido.
+    /// </summary>
+    public void RegistrarXmlGenerado(string xml, string codigoUnico)
     {
         if (string.IsNullOrWhiteSpace(xml))
         {
@@ -443,11 +461,13 @@ public sealed class Documento
                 "Un documento se representa de una sola forma.");
         }
 
-        // La transicion va PRIMERO. Verifica que el documento este donde
-        // corresponde, y si no lo esta, lanza antes de haber tocado nada. Al
-        // reves, un documento en estado invalido se quedaria con el XML
-        // asignado en memoria aunque la operacion hubiera fallado.
-        Transicionar(EstadoDocumento.EnProceso, "XML generado.", momento);
+        if (Estado != EstadoDocumento.EnProceso)
+        {
+            throw new ExcepcionDominio(
+                "ESTADO_NO_PERMITE_GENERAR",
+                $"El documento {NumeroCompleto} esta en {Estado}. El XML se " +
+                "registra con el documento en EnProceso: primero IniciarProceso.");
+        }
 
         Xml = xml;
         CodigoUnico = codigoUnico;

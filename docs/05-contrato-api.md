@@ -160,6 +160,7 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 | `TIPO_DOCUMENTO_NO_SOPORTADO` | 409 | No hay plantilla XML para ese tipo de documento. |
 | `XML_YA_FIRMADO` | 409 | El documento ya está firmado. Una firma vale para unos bytes concretos. |
 | `ESTADO_NO_PERMITE_FIRMAR` | 409 | Solo se firma un documento en `EN_PROCESO`. |
+| `ESTADO_NO_PERMITE_GENERAR` | 409 | El XML se registra con el documento en `EN_PROCESO`. Un documento terminado no genera XML. |
 | `VALIDACION` | 400 | Error de forma. El campo `errores` detalla qué falló y dónde. |
 
 ### 4.6 Datos de las partes

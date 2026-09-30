@@ -27,6 +27,16 @@ public sealed class GenerarXmlHandler(
             return null;
         }
 
+        // EN_PROCESO antes de generar, y guardado antes de intentarlo: si la
+        // generacion falla, el documento tiene que haber quedado donde la
+        // maquina de estados le permite llegar a FALLIDO (seccion 6.2). Un
+        // reintento lo encuentra ya en EnProceso y no repite la transicion.
+        if (documento.Estado == EstadoDocumento.Recibido)
+        {
+            documento.IniciarProceso(reloj.GetUtcNow());
+            await repositorio.GuardarCambiosAsync(cancelacion);
+        }
+
         // La clave tecnica no se guarda con el documento: vive en el rango que
         // le dio su numero. Se busca por prefijo, tipo y NUMERO: prefijo y
         // tipo solos pueden coincidir con la autorizacion de otro ano, que
@@ -42,11 +52,8 @@ public sealed class GenerarXmlHandler(
         var resultado = generador.Generar(documento, rango.ClaveTecnica);
 
         // El dominio decide si esto procede: si el documento ya tiene XML, o
-        // si no esta en un estado desde el que se pueda avanzar, lanza.
-        documento.RegistrarXmlGenerado(
-            resultado.Xml,
-            resultado.CodigoUnico,
-            reloj.GetUtcNow());
+        // si no esta en EnProceso, lanza.
+        documento.RegistrarXmlGenerado(resultado.Xml, resultado.CodigoUnico);
 
         await repositorio.GuardarCambiosAsync(cancelacion);
 
