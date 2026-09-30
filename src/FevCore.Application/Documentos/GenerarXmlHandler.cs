@@ -28,13 +28,15 @@ public sealed class GenerarXmlHandler(
         }
 
         // La clave tecnica no se guarda con el documento: vive en el rango que
-        // le dio su numero. Se busca por prefijo y tipo, que es justamente la
-        // pareja por la que el rango es unico.
-        var rango = await repositorioRangos.BuscarPorPrefijoYTipoAsync(
-            documento.Prefijo, documento.Tipo, cancelacion)
+        // le dio su numero. Se busca por prefijo, tipo y NUMERO: prefijo y
+        // tipo solos pueden coincidir con la autorizacion de otro ano, que
+        // tiene otra clave.
+        var rango = await repositorioRangos.BuscarQueNumeroAsync(
+            documento.Prefijo, documento.Tipo, documento.Consecutivo, cancelacion)
             ?? throw new ExcepcionDominio(
                 "RANGO_NO_DISPONIBLE",
-                $"No se encuentra el rango {documento.Prefijo} para {documento.Tipo}. " +
+                $"No se encuentra el rango que entrego el numero " +
+                $"{documento.NumeroCompleto} para {documento.Tipo}. " +
                 "Sin su clave tecnica no se puede calcular el codigo unico.");
 
         var resultado = generador.Generar(documento, rango.ClaveTecnica);
