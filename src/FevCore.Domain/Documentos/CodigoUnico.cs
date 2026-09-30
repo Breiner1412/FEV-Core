@@ -21,13 +21,6 @@ namespace FevCore.Domain.Documentos;
 /// </summary>
 public sealed record ValoresCufe
 {
-    /// <summary>
-    /// Colombia esta en UTC-05:00 y no aplica horario de verano, asi que el
-    /// desfase es fijo. Las fechas del documento se escriben en esta zona,
-    /// no en UTC.
-    /// </summary>
-    public static readonly TimeSpan ZonaColombia = TimeSpan.FromHours(-5);
-
     public required string NumeroFactura { get; init; }
     public required string Fecha { get; init; }
     public required string Hora { get; init; }
@@ -56,7 +49,8 @@ public sealed record ValoresCufe
                 "rango de numeracion.");
         }
 
-        var enColombia = documento.FechaEmision.ToOffset(ZonaColombia);
+        // Las fechas del documento se escriben en hora colombiana, no en UTC.
+        var enColombia = HoraColombia.En(documento.FechaEmision);
 
         return new ValoresCufe
         {

@@ -54,18 +54,14 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
             // ToUniversalTime no cambia el instante, solo como se escribe.
             // Hace falta porque la columna es timestamptz y Npgsql exige que
             // el parametro lleve desfase cero: pasarle uno en -05:00 lanza.
-            var inicio = new DateTimeOffset(
-                desde.ToDateTime(TimeOnly.MinValue),
-                ValoresCufe.ZonaColombia).ToUniversalTime();
+            var inicio = HoraColombia.InicioDe(desde).ToUniversalTime();
 
             consulta = consulta.Where(d => d.FechaEmision >= inicio);
         }
 
         if (filtro.Hasta is { } hasta)
         {
-            var finExclusivo = new DateTimeOffset(
-                hasta.AddDays(1).ToDateTime(TimeOnly.MinValue),
-                ValoresCufe.ZonaColombia).ToUniversalTime();
+            var finExclusivo = HoraColombia.InicioDe(hasta.AddDays(1)).ToUniversalTime();
 
             consulta = consulta.Where(d => d.FechaEmision < finExclusivo);
         }

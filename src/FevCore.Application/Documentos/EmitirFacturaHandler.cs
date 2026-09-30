@@ -75,6 +75,10 @@ public sealed class EmitirFacturaHandler(
 
         var fechaEmision = comando.FechaEmision ?? reloj.GetUtcNow();
 
+        // La vigencia del rango se evalua con la fecha que el documento
+        // declara, que es la colombiana, no la UTC (RN-02, INV-RAN-04).
+        var fechaCivil = HoraColombia.Fecha(fechaEmision);
+
         // ── 5. Numero y guardado, en una sola transaccion ──
         //
         // Todo lo anterior (validaciones, catalogo, calculo de lineas) quedo
@@ -87,7 +91,7 @@ public sealed class EmitirFacturaHandler(
 
         var rango = await repositorioRangos.TomarVigenteParaActualizarAsync(
             TipoDocumento.Factura,
-            DateOnly.FromDateTime(fechaEmision.UtcDateTime),
+            fechaCivil,
             cancelacion)
             ?? throw new ExcepcionDominio(
                 "RANGO_NO_DISPONIBLE",
@@ -97,7 +101,7 @@ public sealed class EmitirFacturaHandler(
         // Si el rango esta vencido o agotado, esto lanza y la transaccion se
         // revierte al descartarse: no queda numero consumido ni documento.
         var consecutivo = rango.TomarSiguienteConsecutivo(
-            DateOnly.FromDateTime(fechaEmision.UtcDateTime));
+            fechaCivil);
 
         var documento = Documento.EmitirFactura(
             integradorId: comando.IntegradorId,

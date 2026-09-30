@@ -58,6 +58,10 @@ public sealed class EmitirNotaHandler(
         var lineas = ConstructorLineas.Construir(comando.Lineas, productos);
         var fechaEmision = comando.FechaEmision ?? reloj.GetUtcNow();
 
+        // La vigencia del rango se evalua con la fecha que el documento
+        // declara, que es la colombiana, no la UTC (RN-02, INV-RAN-04).
+        var fechaCivil = HoraColombia.Fecha(fechaEmision);
+
         // ── 2. Dos candados, siempre en este orden ──
         //
         // Primero la factura, despues el rango. El orden importa: si un caso
@@ -99,7 +103,7 @@ public sealed class EmitirNotaHandler(
 
         var rango = await repositorioRangos.TomarVigenteParaActualizarAsync(
             comando.Tipo,
-            DateOnly.FromDateTime(fechaEmision.UtcDateTime),
+            fechaCivil,
             cancelacion)
             ?? throw new ExcepcionDominio(
                 "RANGO_NO_DISPONIBLE",
@@ -107,7 +111,7 @@ public sealed class EmitirNotaHandler(
                 "fecha. Registrelo en POST /api/v1/rangos-numeracion.");
 
         var consecutivo = rango.TomarSiguienteConsecutivo(
-            DateOnly.FromDateTime(fechaEmision.UtcDateTime));
+            fechaCivil);
 
         // Aqui se verifican RN-03, RN-04 y RN-05, dentro del dominio.
         var nota = Documento.EmitirNota(

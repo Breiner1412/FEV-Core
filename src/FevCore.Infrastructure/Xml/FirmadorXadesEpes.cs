@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
 using System.Xml;
 using FevCore.Application.Abstracciones;
-using FevCore.Domain.Documentos;
+using FevCore.Domain.Comun;
 
 namespace FevCore.Infrastructure.Xml;
 
@@ -259,8 +259,7 @@ public sealed class FirmadorXadesEpes(IProveedorCertificado proveedor) : IFirmad
         var huellaCertificado = Convert.ToBase64String(SHA256.HashData(certificado.RawData));
 
         // Hora en la zona de Colombia, como el resto del documento.
-        var instante = momento
-            .ToOffset(ValoresCufe.ZonaColombia)
+        var instante = HoraColombia.En(momento)
             .ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture);
 
         var texto = $"""
