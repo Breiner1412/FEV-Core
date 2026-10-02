@@ -288,74 +288,7 @@ paths:
         '404':
           $ref: '#/components/responses/NoEncontrado'
 
-  /documentos/{id}/firma:
-    post:
-      tags: [Consulta]
-      summary: Firmar digitalmente el documento
-      description: |
-        Firma el XML en formato XAdES-EPES con el certificado del emisor y
-        guarda el resultado.
-
-        NO cambia el estado: firmar no es una transición de la máquina de
-        estados. El documento sigue en `EN_PROCESO`, que es el estado definido
-        como "se está generando o firmando el XML".
-
-        Responde `409` con `XML_YA_FIRMADO` si el documento ya está firmado: una
-        firma vale para unos bytes concretos, y volver a firmar produciría dos
-        candidatos a "lo que se transmitió".
-
-        A partir de la etapa 7 lo dispara el proceso en segundo plano.
-
-        Implementa RF-17.
-      operationId: firmarDocumento
-      parameters:
-        - $ref: '#/components/parameters/DocumentoId'
-      responses:
-        '200':
-          description: El documento, ya firmado.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Documento'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '404':
-          $ref: '#/components/responses/NoEncontrado'
-        '409':
-          $ref: '#/components/responses/ConflictoNegocio'
-
   /documentos/{id}/xml:
-    post:
-      tags: [Consulta]
-      summary: Generar el XML del documento
-      description: |
-        Genera el XML en formato UBL 2.1, calcula el código único, lo guarda y
-        mueve el documento a `EN_PROCESO`.
-
-        Es `POST` porque tiene efectos. Responde `409` con `XML_YA_GENERADO` si
-        el documento ya tiene uno: se genera una sola vez, porque en adelante es
-        el artefacto que se firma y se transmite.
-
-        A partir de la etapa 7 lo dispara el proceso en segundo plano y esta ruta
-        deja de ser necesaria.
-
-        Implementa RF-16.
-      operationId: generarXml
-      parameters:
-        - $ref: '#/components/parameters/DocumentoId'
-      responses:
-        '200':
-          description: El documento con su código único ya asignado.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Documento'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '404':
-          $ref: '#/components/responses/NoEncontrado'
-        '409':
-          $ref: '#/components/responses/ConflictoNegocio'
     get:
       tags: [Consulta]
       summary: Descargar el XML

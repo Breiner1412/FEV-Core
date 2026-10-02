@@ -7,8 +7,9 @@ namespace FevCore.Application.Documentos;
 /// <summary>
 /// Caso de uso: generar el XML de un documento (RF-16).
 ///
-/// En H5 se dispara a peticion. En H7 lo llamara el proceso en segundo plano
-/// que recoge los documentos recien recibidos; el caso de uso sera el mismo.
+/// Lo llama el procesador de la bandeja de salida con cada documento
+/// recibido. Fuera de produccion tambien lo expone un endpoint de
+/// desarrollo, para generar a mano con el trabajador apagado.
 /// </summary>
 public sealed class GenerarXmlHandler(
     IRepositorioDocumentos repositorio,

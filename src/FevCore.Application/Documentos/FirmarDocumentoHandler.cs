@@ -6,8 +6,9 @@ namespace FevCore.Application.Documentos;
 /// <summary>
 /// Caso de uso: firmar digitalmente el XML de un documento (RF-17).
 ///
-/// En H7 lo llamara el proceso en segundo plano, justo despues de generar
-/// el XML y antes de transmitir. El caso de uso sera el mismo.
+/// Lo llama el procesador de la bandeja de salida, despues de generar el
+/// XML y antes de transmitir. Fuera de produccion tambien lo expone un
+/// endpoint de desarrollo, para firmar a mano con el trabajador apagado.
 /// </summary>
 public sealed class FirmarDocumentoHandler(
     IRepositorioDocumentos repositorio,
@@ -32,7 +33,7 @@ public sealed class FirmarDocumentoHandler(
             throw new Domain.Comun.ExcepcionDominio(
                 "XML_NO_DISPONIBLE",
                 $"El documento {documento.NumeroCompleto} no tiene XML generado. " +
-                "Generelo primero con POST /api/v1/documentos/{id}/xml.");
+                "Se firma despues de generarlo; no hay nada que firmar.");
         }
 
         var firmado = firmador.Firmar(documento.Xml, reloj.GetUtcNow());

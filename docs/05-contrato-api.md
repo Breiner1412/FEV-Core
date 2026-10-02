@@ -149,19 +149,21 @@ El valor de `codigo` es estable. Es lo que el integrador debe usar para decidir;
 |---|---|---|
 | `DOCUMENTO_REFERENCIADO_NO_ENCONTRADO` | 409 | La factura referenciada no existe. *(RN-03)* |
 | `TIPO_NOTA_INVALIDO` | 409 | Se pidió emitir como nota algo que no es nota crédito ni débito. |
-| `TRANSICION_INVALIDA` | 409 | El cambio de estado solicitado no está en la máquina de estados. *(INV-DOC-08)* |
-| `ESTADO_TERMINAL` | 409 | El documento ya terminó su ciclo y no admite más cambios. *(RN-11)* |
-| `TRANSICION_SIN_MOTIVO` | 409 | Se intentó registrar un cambio de estado sin decir por qué. *(RN-12)* |
+| `TRANSICION_INVALIDA` † | 409 | El cambio de estado solicitado no está en la máquina de estados. *(INV-DOC-08)* |
+| `ESTADO_TERMINAL` † | 409 | El documento ya terminó su ciclo y no admite más cambios. *(RN-11)* |
+| `TRANSICION_SIN_MOTIVO` † | 409 | Se intentó registrar un cambio de estado sin decir por qué. *(RN-12)* |
 | `DOCUMENTO_REFERENCIADO_NO_APROBADO` | 409 | La factura referenciada existe pero no está aprobada. *(RN-03)* |
 | `DOCUMENTO_REFERENCIADO_INVALIDO` | 409 | Se intentó referenciar una nota en lugar de una factura. *(RN-05)* |
 | `NOTA_EXCEDE_VALOR_FACTURA` | 409 | El acumulado de notas crédito superaría el total de la factura. *(RN-04)* |
 | `XML_NO_DISPONIBLE` | 409 | El documento aún no tiene XML generado. |
-| `XML_YA_GENERADO` | 409 | El documento ya tiene XML. Un documento se representa de una sola forma. |
-| `TIPO_DOCUMENTO_NO_SOPORTADO` | 409 | No hay plantilla XML para ese tipo de documento. |
-| `XML_YA_FIRMADO` | 409 | El documento ya está firmado. Una firma vale para unos bytes concretos. |
-| `ESTADO_NO_PERMITE_FIRMAR` | 409 | Solo se firma un documento en `EN_PROCESO`. |
-| `ESTADO_NO_PERMITE_GENERAR` | 409 | El XML se registra con el documento en `EN_PROCESO`. Un documento terminado no genera XML. |
+| `XML_YA_GENERADO` † | 409 | El documento ya tiene XML. Un documento se representa de una sola forma. |
+| `TIPO_DOCUMENTO_NO_SOPORTADO` † | 409 | No hay plantilla XML para ese tipo de documento. |
+| `XML_YA_FIRMADO` † | 409 | El documento ya está firmado. Una firma vale para unos bytes concretos. |
+| `ESTADO_NO_PERMITE_FIRMAR` † | 409 | Solo se firma un documento en `EN_PROCESO`. |
+| `ESTADO_NO_PERMITE_GENERAR` † | 409 | El XML se registra con el documento en `EN_PROCESO`. Un documento terminado no genera XML. |
 | `VALIDACION` | 400 | Error de forma. El campo `errores` detalla qué falló y dónde. |
+
+† Solo los puede devolver un endpoint de desarrollo (`Development` y `Testing`): forzar un estado, o generar y firmar a mano. En producción esos pasos los hace el trabajador en segundo plano y ninguna respuesta lleva estos códigos; si ocurren, aparecen en los registros y el documento acaba en `FALLIDO` (sección 5.5).
 
 ### 4.6 Datos de las partes
 
@@ -382,6 +384,7 @@ Declarado explícitamente para que ningún integrador asuma de más.
 |---|---|---|
 | 1.0 | 2026-09-24 | Versión inicial. 13 rutas, 31 esquemas, 20 códigos de error. |
 | 1.1 | 2026-09-29 | H7. Se añaden `identificadorSeguimiento` y `erroresValidacion` al documento. 15 rutas, 30 esquemas. |
+| 1.3 | 2026-10-02 | Auditoría final. `POST /documentos/{id}/xml` y `POST /documentos/{id}/firma` salen del contrato: pasan a existir solo en `Development` y `Testing`. Desde H7 los hace el trabajador en segundo plano (ADR-0005), y abiertos en producción permitían a un integrador competir con él por el mismo documento. 13 rutas. |
 | 1.2 | 2026-10-02 | Auditoría final. `FALLIDO` deja de describirse como "resultado desconocido" en todos los casos: el historial distingue cuatro, y solo uno obliga a verificar ante la autoridad (sección 5.5, ADR-0015). |
 
 **Cambio incompatible en 1.1.** `erroresValidacion` se documentaba como lista de objetos con `codigo` y `descripcion`, y la implementación devuelve textos. Se corrigió el contrato para que diga la verdad, no la implementación para que encajara con el contrato: un documento que promete algo que el código no hace es peor que no tenerlo.

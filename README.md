@@ -170,8 +170,8 @@ curl $API/documentos/$DOC -H "X-Api-Key: $LLAVE"
 ```
 
 El `estado` recorre `RECIBIDO` → `EN_PROCESO` → `TRANSMITIDO` → `APROBADO`, y
-aparece un `identificadorSeguimiento`. El campo `historial` guarda cada paso con
-su motivo, así que se puede reconstruir qué pasó y cuándo.
+aparece un `identificadorSeguimiento`. El historial (paso 8) guarda cada paso
+con su motivo, así que se puede reconstruir qué pasó y cuándo.
 
 **Prueba a romperlo.** El simulador obedece cuatro modos, y son la razón de que
 exista:
@@ -223,26 +223,26 @@ factura responde `409 DOCUMENTO_REFERENCIADO_INVALIDO` (RN-05).
 > `Testing`, mediante lista blanca. No aparece en `api/openapi.yaml`: el contrato
 > describe lo que un integrador puede usar, y esto no lo es.
 
-**7. Mira el historial** (RF-23):
+**8. Mira el historial** (RF-23):
 
 ```bash
 curl $API/documentos/$DOC/historial -H "X-Api-Key: $LLAVE"
 ```
 
-Devuelve las cuatro transiciones, empezando por el nacimiento del documento, que
-tiene `estadoAnterior` nulo. Cada una dice cuándo ocurrió y por qué.
+Devuelve cada transición, empezando por el nacimiento del documento, que tiene
+`estadoAnterior` nulo. Cada una dice cuándo ocurrió y por qué. En un documento
+`FALLIDO`, el detalle de la última dice qué consta ante la autoridad.
 
-**8. Genera el XML y descárgalo** (RF-16, RF-25):
+**9. Descarga el XML firmado** (RF-16, RF-17, RF-25):
 
 ```bash
-curl -X POST $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE"
 curl $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE" -o factura.xml
 ```
 
-El primero calcula el CUFE, guarda el XML y mueve el documento a `EN_PROCESO`.
-El segundo devuelve el archivo. Repetir el `POST` responde `409`: un documento
-se representa de una sola forma, porque en la etapa 6 esos bytes concretos se
-firman.
+El trabajador del paso 6 ya lo generó, calculó el CUFE y lo firmó antes de
+transmitirlo; aquí solo se descarga. Lo que se descarga es el XML firmado, el
+mismo que recibió la autoridad. El original sin firmar se conserva internamente
+para poder reproducir el cálculo.
 
 El XML valida contra el esquema oficial de UBL 2.1, que viene versionado en
 `schemas/ubl-2.1/`. **Eso significa que su estructura es correcta, no que la
@@ -250,24 +250,17 @@ DIAN lo aceptaría:** el anexo técnico añade centenares de validaciones de
 negocio que ningún esquema expresa. Qué campos se implementaron y cuáles no
 está en [docs/07-cobertura-ubl.md](docs/07-cobertura-ubl.md).
 
-**9. Firma el documento** (RF-17):
-
-```bash
-curl -X POST $API/documentos/$DOC/firma -H "X-Api-Key: $LLAVE"
-curl $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE" -o factura-firmada.xml
-```
-
-Hace falta un certificado configurado en `.env` (ver `Firma__CertificadoBase64`).
-Sin él responde `409 CERTIFICADO_NO_CONFIGURADO`, y el resto del recorrido
-funciona igual: se puede levantar el proyecto entero sin tener uno.
-
 La firma va en formato **XAdES-EPES**, dentro de `ext:UBLExtensions`, con la
-política de firma que exige la DIAN. El XML descargado a partir de aquí es el
-firmado; el original se conserva internamente para poder reproducir el cálculo.
+política de firma que exige la DIAN. Hace falta un certificado configurado en
+`.env` (ver `Firma__CertificadoBase64`). Sin él el documento no se puede firmar,
+acaba en `FALLIDO` y su historial dice `NO SALIO DE AQUI`; el resto del
+proyecto se levanta igual.
 
-Firmar no cambia el estado: el documento sigue en `EN_PROCESO`, que es
-justamente lo que ese estado significa. Repetir el `POST` responde `409`, porque
-una firma vale para unos bytes concretos.
+> Para generar y firmar a mano, paso a paso, existen `POST /documentos/{id}/xml`
+> y `POST /documentos/{id}/firma`, solo en `Development` y `Testing`, como el
+> endpoint `/desarrollo`. Sirven con el trabajador apagado
+> (`Salida__Habilitado=false`). En producción no existen: lo hace el trabajador,
+> y un integrador no debe competir con él por el mismo documento.
 
 **Lo que esto no garantiza:** que la DIAN aceptaría la firma. La estructura
 sigue el anexo técnico y el documento valida contra el esquema, pero no se ha
