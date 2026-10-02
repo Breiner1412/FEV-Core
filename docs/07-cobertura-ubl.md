@@ -62,7 +62,9 @@ tarifa, descripción, código del producto y precio unitario.
 El mismo generador produce los tres tipos. UBL les cambia el espacio de
 nombres raíz y algunos nombres de elemento —`LegalMonetaryTotal` pasa a
 `RequestedMonetaryTotal`, `InvoicedQuantity` a `CreditedQuantity`— y las
-notas añaden `cac:BillingReference` apuntando a la factura corregida.
+notas añaden `cac:BillingReference` para señalar la factura corregida, **pero
+la señalan con el identificador interno de este sistema**, no con datos que la
+autoridad conozca. Ver la sección 2.
 
 ---
 
@@ -70,6 +72,7 @@ notas añaden `cac:BillingReference` apuntando a la factura corregida.
 
 | Elemento del estándar | Por qué se omite |
 |---|---|
+| El contenido real de `cac:BillingReference` en las notas | **Hueco declarado en la auditoría final, no resuelto.** `cac:InvoiceDocumentReference/cbc:ID` lleva el identificador interno (un GUID) de la factura corregida, que solo significa algo dentro de este sistema. La DIAN identifica la factura por su número (prefijo y consecutivo), su `cbc:UUID` con el CUFE y su `cbc:IssueDate`, y nada de eso se escribe. El XML valida contra el esquema, porque el esquema solo exige que haya un `ID`, pero una nota así no le dice a la autoridad qué factura corrige. Arreglarlo exige que el generador reciba los datos de la factura referenciada, que hoy no tiene: la nota guarda su identificador, no su número ni su CUFE. |
 | `cac:Signature` | El bloque descriptivo de UBL sobre quién firma. La firma real va en `ext:UBLExtensions`, que sí se emite desde la etapa 6. |
 | `cbc:CityName`, `cbc:CountrySubentity` | El sistema guarda el **código** de municipio, no su nombre ni el del departamento. Añadirlos exigiría incorporar el listado oficial de municipios. El plan lo situaba en H8 *(validar códigos contra listas oficiales)* y no se hizo: los códigos se comprueban que vengan, no que existan (`08-despliegue.md`, sección 6). La DIAN los exige; hoy es una omisión conocida, no un descuido. |
 | `cac:PaymentMeans`, `cac:PaymentTerms` | La forma de pago aparece en RF-11 pero el modelo de dominio no la capturó. Es una **inconsistencia entre requisitos e implementación**, registrada en la sección 4. |
