@@ -196,7 +196,7 @@ La entidad central. Representa una factura, una nota crédito o una nota débito
 | `rangoId` | Rango del que se tomó el número. |
 | `fechaEmision` | Fecha y hora de emisión. |
 | `estado` | Estado actual, según la máquina de la sección 6 del documento de requerimientos. |
-| `adquirenteSnapshot` | Copia de los datos del adquirente al momento de emitir. |
+| `adquirenteSnapshot` | Copia de los datos del adquirente al momento de emitir. En una nota, copia de los de la factura que corrige, no del catálogo actual *(ADR-0017)*. |
 | `emisorSnapshot` | Copia de los datos del emisor al momento de emitir. |
 | `lineas` | Las líneas de detalle. |
 | `moneda` | Moneda del documento. |

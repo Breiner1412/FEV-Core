@@ -278,6 +278,12 @@ public sealed class Documento
     /// averiguar por si mismo: cuanto suman las otras notas credito de esa
     /// factura. La aplicacion la calcula y la entrega; la regla de que no se
     /// exceda el total sigue viviendo aqui (RN-04).
+    ///
+    /// Las dos partes se tratan distinto a proposito (ADR-0017). El
+    /// adquirente es parte de la operacion que se corrige: identidad y datos
+    /// salen de la factura, aqui, y por eso no se reciben. El emisor es quien
+    /// expide el documento nuevo, hoy: sus datos actuales los entrega quien
+    /// llama.
     /// </summary>
     public static Documento EmitirNota(
         TipoDocumento tipo,
@@ -290,7 +296,6 @@ public sealed class Documento
         MotivoNota motivo,
         string? observaciones,
         DatosTributarios emisorSnapshot,
-        DatosTributarios adquirenteSnapshot,
         IEnumerable<Linea> lineas,
         Dinero notasCreditoPrevias)
     {
@@ -354,12 +359,15 @@ public sealed class Documento
             fechaEmision: fechaEmision,
 
             // La nota hereda la moneda y el adquirente de la factura: no se
-            // corrige una factura en otra moneda ni a nombre de otro.
+            // corrige una factura en otra moneda ni a nombre de otro. Del
+            // adquirente hereda la identidad Y los datos, los dos del mismo
+            // sitio. Antes la identidad salia de la factura y los datos del
+            // catalogo actual (ADR-0017).
             moneda: facturaReferenciada.Moneda,
             adquirenteId: facturaReferenciada.AdquirenteId,
+            adquirenteSnapshot: facturaReferenciada.AdquirenteSnapshot.Copiar(),
 
             emisorSnapshot: emisorSnapshot,
-            adquirenteSnapshot: adquirenteSnapshot,
             documentoReferenciadoId: facturaReferenciada.Id,
             motivo: motivo,
             observaciones: string.IsNullOrWhiteSpace(observaciones)

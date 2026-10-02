@@ -27,7 +27,6 @@ public sealed record ComandoEmitirNota(
 public sealed class EmitirNotaHandler(
     IRepositorioDocumentos repositorio,
     IRepositorioEmisor repositorioEmisor,
-    IRepositorioAdquirentes repositorioAdquirentes,
     IRepositorioProductos repositorioProductos,
     IRepositorioRangos repositorioRangos,
     IUnidadDeTrabajo unidadDeTrabajo,
@@ -86,19 +85,6 @@ public sealed class EmitirNotaHandler(
                 $"No existe un documento con el identificador " +
                 $"{comando.DocumentoReferenciadoId}.");
 
-        // El adquirente se resuelve por el de la FACTURA, no por uno que
-        // mande el cliente: una nota corrige una venta concreta, a su mismo
-        // comprador.
-        //
-        // No se comprueba que siga activo: desactivar un adquirente impide
-        // venderle de nuevo, no corregir lo que ya se le vendio.
-        var adquirente = await repositorioAdquirentes.ObtenerPorIdAsync(
-            factura.AdquirenteId, cancelacion)
-            ?? throw new ExcepcionDominio(
-                "ADQUIRENTE_NO_ENCONTRADO",
-                $"La factura {factura.NumeroCompleto} referencia un adquirente " +
-                "que ya no existe en el catalogo.");
-
         // RN-04: cuanto se lleva acreditado de esta factura. Es la unica
         // cifra que el dominio no puede averiguar solo, por eso se calcula
         // aqui y se le entrega.
@@ -129,8 +115,12 @@ public sealed class EmitirNotaHandler(
             facturaReferenciada: factura,
             motivo: comando.Motivo,
             observaciones: comando.Observaciones,
+            // El emisor, con sus datos de hoy: es quien expide la nota. El
+            // adquirente no se pasa: lo hereda de la factura (ADR-0017). Por
+            // eso tampoco se consulta el catalogo, ni importa si el
+            // adquirente sigue activo: desactivarlo impide venderle de nuevo,
+            // no corregir lo que ya se le vendio.
             emisorSnapshot: emisor.Datos.Copiar(),
-            adquirenteSnapshot: adquirente.Datos.Copiar(),
             lineas: lineas,
             notasCreditoPrevias: notasPrevias);
 

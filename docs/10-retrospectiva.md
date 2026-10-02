@@ -14,8 +14,8 @@ Este documento existe porque un plan que se cumple a la perfección no se lo cre
 | Del primer commit al último | 24 al 30 de septiembre de 2026 |
 | Código de producción | 15.800 líneas en 106 archivos *(al cierre de H8)* |
 | Código de pruebas | 7.100 líneas en 38 archivos *(al cierre de H8)* |
-| Pruebas automatizadas | 361 al cierre de H8; 393 tras la auditoría final, todas en verde |
-| Decisiones registradas (ADR) | 16 (14 en H8; la auditoría añadió ADR-0015, que sustituye a ADR-0014, y ADR-0016) |
+| Pruebas automatizadas | 361 al cierre de H8; 400 tras la auditoría final, todas en verde |
+| Decisiones registradas (ADR) | 17 (14 en H8; la auditoría añadió ADR-0015, que sustituye a ADR-0014, ADR-0016 y ADR-0017) |
 | Migraciones de base de datos | 9 (la novena, de la auditoría final) |
 | Requerimientos | 50: 3 sin verificación automática y 2 implementados solo en parte (RF-11, RF-24) |
 
@@ -181,6 +181,8 @@ Una línea por deuda, como la sección 4 dice que debió hacerse desde H0:
 - **`Documento.Transicionar` es público.** Permite llegar a `RECHAZADO` sin errores o a `TRANSMITIDO` sin transmisión. La producción no lo usa (el procesador mueve los documentos con los métodos que además registran lo que pasó), pero lo usan el endpoint de desarrollo y las pruebas de dominio. Cerrarlo obliga a reescribir esas pruebas para que recorran los caminos reales; al cierre no compensa.
 - **Cada repositorio tiene su `GuardarCambiosAsync`, y todos guardan el contexto entero.** La emisión guarda la tarea y el contador del rango "a través" del repositorio de documentos, y un comentario lo tiene que aclarar. La operación pertenece a `IUnidadDeTrabajo`.
 - **El documento no guarda el rango que lo numeró.** La clave técnica se busca deduciendo el rango por prefijo, tipo y número. Es correcto porque INV-RAN-03 impide que dos rangos compartan números, pero guardar `RangoId` sería explícito. Exige migración y tocar el agregado.
-- **Qué hereda una nota de su factura (pendiente de decisión).** La nota toma los datos *actuales* del adquirente del catálogo, no los que figuran en la factura, y los consulta con la factura bloqueada.
 - **El alta de integradores no existe fuera de `Development`.** Declarado en `08-despliegue.md`, sección 6.
 - **RF-11 y RF-24 están implementados solo en parte.** Declarado en `09-trazabilidad.md`.
+- **`cac:BillingReference` de las notas lleva el identificador interno de la factura**, no su número ni su CUFE. Declarado en `07-cobertura-ubl.md`.
+
+Lo que la auditoría encontró y decidió no arreglar, con el motivo de cada cosa, está en el cuerpo del pull request de la auditoría. Aquí queda solo lo que es deuda.

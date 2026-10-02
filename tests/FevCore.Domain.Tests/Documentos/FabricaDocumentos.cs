@@ -104,7 +104,6 @@ internal static class FabricaDocumentos
             motivo: MotivoNota.DevolucionParcial,
             observaciones: null,
             emisorSnapshot: DatosEmisor(),
-            adquirenteSnapshot: DatosAdquirente(),
             lineas: [Linea1(cantidad, precioUnitario)],
             notasCreditoPrevias: Dinero.Desde(notasPrevias));
 }

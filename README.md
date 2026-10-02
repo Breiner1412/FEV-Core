@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: completo.** Los 9 hitos entregados y una auditoría final, 393 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: completo.** Los 9 hitos entregados y una auditoría final, 400 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
 >
 > Si vas a mirar una sola cosa, que sea la [retrospectiva](docs/10-retrospectiva.md): qué se subestimó, qué salió mejor de lo esperado y qué haría diferente.
 
@@ -323,7 +323,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | 2 | [Requerimientos](docs/02-requerimientos.md) | 25 funcionales, 13 reglas de negocio, 12 no funcionales |
 | 3 | [Modelo de dominio](docs/03-modelo-dominio.md) | 12 entidades, 6 agregados, 33 invariantes |
 | 4 | [Arquitectura](docs/04-arquitectura.md) | Capas, flujos y estrategia de pruebas |
-| — | [Decisiones (ADR)](docs/adr/) | 16 decisiones con sus alternativas descartadas |
+| — | [Decisiones (ADR)](docs/adr/) | 17 decisiones con sus alternativas descartadas |
 | 5 | [Contrato de la API](docs/05-contrato-api.md) | Endpoints, códigos de error y guía de integración |
 | — | [Especificación OpenAPI](api/openapi.yaml) | El contrato en formato procesable |
 | 6 | [Plan de entregas](docs/06-plan-entregas.md) | Los 9 hitos y su definición de terminado |
