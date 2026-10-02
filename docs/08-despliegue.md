@@ -130,6 +130,8 @@ dotnet tool install --global dotnet-ef
 dotnet ef database update --project src/FevCore.Infrastructure --startup-project src/FevCore.Api
 ```
 
+Las herramientas de EF toman la cadena de conexión de la variable `ConnectionStrings__Principal` o, si no está, del `.env` de la raíz del repositorio. Si no la encuentran en ninguno, fallan diciendo qué falta: no hay un valor de respaldo con la contraseña escrita en el código *(RNF-01)*.
+
 ### Actualizar una base que ya tiene datos
 
 La migración `IndicesUnicosCatalogos` vuelve únicos, solo entre los activos, la identificación de los adquirentes y el código de los productos. Antes de ella la base no lo impedía, y dos altas simultáneas podían dejar dos registros activos iguales.
