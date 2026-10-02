@@ -106,17 +106,6 @@ public sealed class AdquirenteTests
         Assert.Equal("Juan Perez", adquirente.Datos.RazonSocial);
         Assert.Equal(despues, adquirente.ActualizadoEn);
     }
-
-    [Fact]
-    public void Un_adquirente_desactivado_se_puede_reactivar()
-    {
-        var adquirente = Adquirente.Crear(Datos(), Ahora);
-
-        adquirente.Desactivar(Ahora.AddDays(1));
-        adquirente.Reactivar(Ahora.AddDays(2));
-
-        Assert.True(adquirente.Activo);
-    }
 }
 
 public sealed class ProductoTests

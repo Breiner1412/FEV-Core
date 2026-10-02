@@ -18,15 +18,7 @@ public interface IRepositorioTareas
         TimeSpan tiempoDeAbandono,
         CancellationToken cancelacion = default);
 
-    Task<TareaSalida?> ObtenerPorDocumentoAsync(
-        Guid documentoId,
-        TipoTarea tipo,
-        CancellationToken cancelacion = default);
-
     Task AgregarAsync(TareaSalida tarea, CancellationToken cancelacion = default);
 
     Task GuardarCambiosAsync(CancellationToken cancelacion = default);
-
-    /// <summary>Cuantas tareas quedan pendientes. Para diagnostico y pruebas.</summary>
-    Task<int> ContarPendientesAsync(CancellationToken cancelacion = default);
 }

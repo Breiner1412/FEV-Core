@@ -60,10 +60,4 @@ public sealed class Adquirente
         Activo = false;
         ActualizadoEn = momento;
     }
-
-    public void Reactivar(DateTimeOffset momento)
-    {
-        Activo = true;
-        ActualizadoEn = momento;
-    }
 }

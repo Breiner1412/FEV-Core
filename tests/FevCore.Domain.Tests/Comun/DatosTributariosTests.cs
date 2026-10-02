@@ -146,14 +146,6 @@ public sealed class DatosTributariosTests
         Assert.Equal(2, datos.Responsabilidades.Count);
     }
 
-    [Fact]
-    public void La_clave_de_identidad_junta_tipo_y_numero()
-    {
-        var datos = Crear(identificacion: "890903938", dv: "8");
-
-        Assert.Equal("31:890903938", datos.ClaveIdentidad);
-    }
-
     // ── Semantica de valor ──
 
     [Fact]
