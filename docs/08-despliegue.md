@@ -130,6 +130,26 @@ dotnet tool install --global dotnet-ef
 dotnet ef database update --project src/FevCore.Infrastructure --startup-project src/FevCore.Api
 ```
 
+### Actualizar una base que ya tiene datos
+
+La migración `IndicesUnicosCatalogos` vuelve únicos, solo entre los activos, la identificación de los adquirentes y el código de los productos. Antes de ella la base no lo impedía, y dos altas simultáneas podían dejar dos registros activos iguales.
+
+**Si la base ya tiene duplicados, la migración falla, y es lo correcto.** La alternativa sería crear el índice saltándose esas filas: la regla se cumpliría para lo nuevo y no para lo que ya está mal. Como la API aplica las migraciones al arrancar, el síntoma es que la API no arranca.
+
+Quien actualice una base con datos tiene que limpiarla primero. Para encontrar los duplicados:
+
+```sql
+SELECT "Datos_TipoIdentificacion", "Datos_Identificacion", count(*)
+FROM adquirentes WHERE "Activo"
+GROUP BY 1, 2 HAVING count(*) > 1;
+
+SELECT "Codigo", count(*)
+FROM productos WHERE "Activo"
+GROUP BY 1 HAVING count(*) > 1;
+```
+
+De cada grupo hay que decidir cuál es el bueno y desactivar los demás (`DELETE /api/v1/adquirentes/{id}` o `DELETE /api/v1/productos/{id}`, que desactivan y no borran). Los documentos ya emitidos no se ven afectados: guardan su propia copia de los datos *(RN-10)*.
+
 ---
 
 ## 5. Qué no se guarda nunca (RNF-01)

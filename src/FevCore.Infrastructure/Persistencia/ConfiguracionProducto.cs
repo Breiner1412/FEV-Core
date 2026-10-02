@@ -8,6 +8,12 @@ public sealed class ConfiguracionProducto : IEntityTypeConfiguration<Producto>
 {
     private const string TipoColumnaDinero = "numeric(18,6)";
 
+    /// <summary>
+    /// Nombre del indice de codigo unico entre activos. Publico porque el
+    /// repositorio lo reconoce al traducir una violacion de unicidad.
+    /// </summary>
+    public const string IndiceCodigo = "ix_productos_codigo";
+
     public void Configure(EntityTypeBuilder<Producto> producto)
     {
         producto.ToTable("productos");
@@ -35,9 +41,13 @@ public sealed class ConfiguracionProducto : IEntityTypeConfiguration<Producto>
         producto.Property(p => p.CreadoEn).IsRequired();
         producto.Property(p => p.ActualizadoEn).IsRequired();
 
-        // Dos productos activos no pueden compartir codigo.
+        // Dos productos activos no pueden compartir codigo. Unico y parcial,
+        // por la misma razon que el de adquirentes: la comprobacion de la
+        // aplicacion no resiste dos altas simultaneas.
         producto.HasIndex(p => p.Codigo)
-            .HasDatabaseName("ix_productos_codigo");
+            .IsUnique()
+            .HasFilter("\"Activo\"")
+            .HasDatabaseName(IndiceCodigo);
 
         // ── Impuestos aplicables: pertenecen al producto ──
         producto.OwnsMany(p => p.Impuestos, impuesto =>

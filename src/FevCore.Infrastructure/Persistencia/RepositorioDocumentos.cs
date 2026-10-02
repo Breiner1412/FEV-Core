@@ -2,7 +2,6 @@ using FevCore.Application.Abstracciones;
 using FevCore.Domain.Comun;
 using FevCore.Domain.Documentos;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace FevCore.Infrastructure.Persistencia;
 
@@ -190,11 +189,8 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
         {
             await contexto.SaveChangesAsync(cancelacion);
         }
-        catch (DbUpdateException error) when (error.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: ConfiguracionDocumento.IndiceReferenciaExterna
-        })
+        catch (DbUpdateException error) when (TraduccionUnicidad.EsViolacionDe(
+            error, ConfiguracionDocumento.IndiceReferenciaExterna))
         {
             throw new ExcepcionReferenciaDuplicada(error);
         }
