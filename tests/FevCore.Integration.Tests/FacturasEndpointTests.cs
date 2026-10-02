@@ -398,6 +398,26 @@ public sealed class FacturasEndpointTests(FabricaApiConBaseDeDatos fabrica)
         Assert.Equal("PRODUCTO_INACTIVO", problema.GetProperty("codigo").GetString());
     }
 
+    /// <summary>
+    /// Un descuento negativo es un error de forma, y el contrato lo declara
+    /// con minimum: 0. Sin validacion llegaba hasta Dinero.Desde, que lanza
+    /// ArgumentOutOfRangeException, y respondia 500 ERROR_INTERNO (RNF-11).
+    /// </summary>
+    [Fact]
+    public async Task Un_descuento_negativo_responde_400()
+    {
+        var cliente = fabrica.CrearClienteAutenticado();
+        await ConfigurarEmisor(cliente);
+        var adquirente = await CrearAdquirente(cliente);
+        var producto = await CrearProducto(cliente);
+
+        var respuesta = await cliente.PostAsJsonAsync(
+            RutaFacturas,
+            SolicitudFactura(Referencia(), adquirente, [(producto, 1m, null, -1m)]));
+
+        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+    }
+
     [Fact]
     public async Task Una_cantidad_en_cero_responde_400()
     {

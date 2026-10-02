@@ -58,6 +58,15 @@ public sealed record LineaSolicitud
         ErrorMessage = "El precio unitario debe ser mayor que cero.")]
     public decimal? PrecioUnitario { get; init; }
 
+    /// <summary>
+    /// Sobre el valor bruto de la linea. Que no lo supere lo comprueba el
+    /// dominio (INV-LIN-02, 409); que no sea negativo es un error de forma
+    /// (400), como declara el contrato con minimum: 0.
+    /// </summary>
+    [Range(typeof(decimal), "0", "999999999999",
+        ParseLimitsInInvariantCulture = true,
+        ConvertValueInInvariantCulture = true,
+        ErrorMessage = "El descuento no puede ser negativo.")]
     public decimal? Descuento { get; init; }
 }
 
