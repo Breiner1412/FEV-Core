@@ -299,7 +299,7 @@ Consultar cada pocos segundos hasta que el estado sea terminal: `APROBADO`, `REC
 | `RECIBIDO`, `EN_PROCESO`, `TRANSMITIDO` | Sigue esperando. |
 | `APROBADO` | Listo. `codigoUnico` está disponible y el XML se puede descargar. |
 | `RECHAZADO` | La autoridad lo rechazó. Revisar `erroresValidacion`, corregir y emitir un documento nuevo. El original no se puede corregir *(RN-07)*. |
-| `FALLIDO` | **Resultado desconocido.** Requiere revisión manual antes de emitir un reemplazo. Ver más abajo. |
+| `FALLIDO` | **Sin desenlace.** Hace falta una persona; el historial dice si hay que verificar ante la autoridad antes de emitir un reemplazo. Ver más abajo. |
 
 Dos campos aparecen durante el recorrido:
 
@@ -323,11 +323,18 @@ Esto vale para todos los errores de comunicación y para `500`. No vale para `40
 
 Es el único estado que exige intervención humana.
 
-Significa que el sistema agotó sus reintentos sin obtener un veredicto. No significa que la autoridad no haya recibido el documento: puede haberlo recibido y haberse perdido la respuesta.
+Significa que el documento no llegó a un desenlace y hace falta una persona. **No dice por sí solo qué pasó**: lo dice el historial. El detalle de la transición a `FALLIDO`, en `GET /documentos/{id}/historial`, empieza por uno de estos textos:
 
-Por eso el integrador **no debe reemplazarlo automáticamente**. Emitir un documento nuevo sin verificar podría duplicar una factura que sí llegó, y una factura duplicada ante la autoridad tributaria no se arregla borrando un registro.
+| Detalle | Qué se sabe | Antes de emitir un reemplazo |
+|---|---|---|
+| `NO SALIO DE AQUI` | Ningún envío llegó a la autoridad: no se pudo generar o firmar el XML, o el servicio no estaba disponible. | Se puede reemplazar. |
+| `NO RADICADO` | El envío llegó y el servicio de validación rechazó la entrega. | Se puede reemplazar. |
+| `RADICADO SIN VEREDICTO` | La autoridad recibió el documento y dio un identificador de seguimiento, pero no se obtuvo su veredicto. | Consultar el veredicto con ese identificador. No hace falta verificar si llegó: consta que sí. |
+| `RESULTADO DESCONOCIDO` | Hubo un envío sin respuesta: **pudo haber llegado**. | **Verificar ante la DIAN.** |
 
-El procedimiento correcto es consultar `GET /documentos/{id}/historial` para ver qué ocurrió, verificar por fuera del sistema si el documento existe ante la autoridad, y solo entonces decidir. Esto implementa RN-13.
+Solo el último obliga a verificar ante la autoridad. En ese caso el integrador **no debe reemplazarlo automáticamente**: emitir un documento nuevo sin verificar podría duplicar una factura que sí llegó, y una factura duplicada ante la autoridad tributaria no se arregla borrando un registro.
+
+Esto implementa RN-13. La distinción entre los casos se decidió en ADR-0015. Antes, todo `FALLIDO` se describía como resultado desconocido, y eso mandaba a investigar ante la autoridad también los documentos que nunca salieron. Los documentos que llegaron a `FALLIDO` antes de ese cambio conservan el texto anterior, y en ellos "no consta que el documento llegara" **no** garantiza que no llegara.
 
 ---
 
@@ -362,7 +369,7 @@ Declarado explícitamente para que ningún integrador asuma de más.
 |---|---|
 | Que un documento aceptado será aprobado | `202` significa recibido, no validado. |
 | Un tiempo máximo hasta el veredicto | Depende de un servicio externo. |
-| Que `FALLIDO` implique que el documento no llegó a la autoridad | RN-13. Es un resultado desconocido. |
+| Que `FALLIDO` implique que el documento no llegó a la autoridad | RN-13. Puede haber llegado; el historial dice qué consta (sección 5.5). |
 | Notificación cuando cambia el estado | Versión 1 es solo consulta. Candidato a versión 2. |
 | Estabilidad del texto de `title` y `detail` | Solo `codigo` y `status` son estables. |
 | Orden de procesamiento entre documentos | Se asigna consecutivo en orden de llegada, pero el procesamiento posterior puede completarse en otro orden. |
@@ -375,6 +382,7 @@ Declarado explícitamente para que ningún integrador asuma de más.
 |---|---|---|
 | 1.0 | 2026-09-24 | Versión inicial. 13 rutas, 31 esquemas, 20 códigos de error. |
 | 1.1 | 2026-09-29 | H7. Se añaden `identificadorSeguimiento` y `erroresValidacion` al documento. 15 rutas, 30 esquemas. |
+| 1.2 | 2026-10-02 | Auditoría final. `FALLIDO` deja de describirse como "resultado desconocido" en todos los casos: el historial distingue cuatro, y solo uno obliga a verificar ante la autoridad (sección 5.5, ADR-0015). |
 
 **Cambio incompatible en 1.1.** `erroresValidacion` se documentaba como lista de objetos con `codigo` y `descripcion`, y la implementación devuelve textos. Se corrigió el contrato para que diga la verdad, no la implementación para que encajara con el contrato: un documento que promete algo que el código no hace es peor que no tenerlo.
 

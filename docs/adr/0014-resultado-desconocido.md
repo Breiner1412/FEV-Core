@@ -1,7 +1,9 @@
 # ADR-0014: El resultado desconocido como estado propio
 
-**Estado:** Aceptada
+**Estado:** Sustituida por ADR-0015
 **Fecha:** 2026-09-29
+
+> **Nota de la auditoría final.** Este ADR se conserva tal como se escribió. Dos cosas que dice ya no son correctas, y ADR-0015 las corrige: un 202 o 200 sin identificador de seguimiento no es `ErrorTransitorio` sino `SinRespuesta`, y `FALLIDO` no significa siempre "nadie sabe qué pasó": significa "sin desenlace, hace falta una persona", y el historial dice cuál de los casos es.
 
 ## Contexto
 

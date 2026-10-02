@@ -434,7 +434,7 @@ Dónde queda garantizada cada regla de la etapa 2.
 | RN-10 — Aprobado inmutable | `INV-DOC-07` + `INV-LIN-03` |
 | RN-11 — Terminal es terminal | `INV-DOC-08` |
 | RN-12 — Toda transición registrada | `TransicionEstado` + `INV-TRA-01` |
-| RN-13 — Fallido es incertidumbre | `Transmision` + `INV-TRM-02` |
+| RN-13 — Fallido es "sin desenlace"; el historial dice qué consta | `Transmision` + `INV-TRM-02` + `Documento.RegistrarFallo` (ADR-0015) |
 
 Las trece reglas tienen un lugar concreto en el modelo donde se hacen cumplir. Ninguna queda a cargo de "que el programador se acuerde".
 

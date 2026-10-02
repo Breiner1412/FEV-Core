@@ -190,7 +190,9 @@ motivos. Con `CAIDO`, el trabajador reintenta esperando cada vez más, y vuelve 
 avanzar en cuanto el simulador se recupera. Con `SIN_RESPUESTA` —el que importa—
 el documento acaba en `FALLIDO`, que **no** significa rechazado: significa que
 nadie sabe si la DIAN lo recibió, y que hace falta una persona antes de volver a
-emitir. El porqué está en el [ADR-0014](docs/adr/0014-resultado-desconocido.md).
+emitir. Su historial lo dice: `RESULTADO DESCONOCIDO`. No todo `FALLIDO` es así;
+el historial distingue los casos, y solo ese obliga a verificar ante la DIAN. El
+porqué está en el [ADR-0015](docs/adr/0015-desenlace-de-un-documento-fallido.md).
 
 **7. Emite una nota crédito.** Una nota solo corrige una factura **aprobada**
 (RN-03). Si el simulador está en `APRUEBA`, la factura del paso 4 llega sola a

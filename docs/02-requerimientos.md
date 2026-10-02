@@ -217,7 +217,7 @@ Todo documento recorre esta máquina de estados. Ninguna transición distinta de
 | `TRANSMITIDO` | Entregado al servicio de validación. Se tiene identificador de seguimiento. A la espera de veredicto. | No |
 | `APROBADO` | Validado por la autoridad. Tiene código único. | Sí |
 | `RECHAZADO` | La autoridad lo rechazó. Tiene lista de errores. | Sí |
-| `FALLIDO` | El sistema no logró completar el proceso tras agotar los reintentos. El fallo es propio o de comunicación, no un rechazo de la autoridad. | Sí |
+| `FALLIDO` | El documento no llegó a un desenlace tras agotar los reintentos y hace falta una persona. El fallo es propio o de comunicación, no un rechazo de la autoridad. El historial dice cuál de los casos fue (RN-13). | Sí |
 
 ### 6.2 Transiciones permitidas
 
@@ -234,7 +234,7 @@ TRANSMITIDO  → FALLIDO        (sin veredicto tras agotar reintentos)
 
 - **RN-11:** un documento en estado terminal no cambia de estado nunca más.
 - **RN-12:** toda transición queda registrada con su marca de tiempo y el motivo que la produjo.
-- **RN-13:** un documento en `FALLIDO` no implica que la autoridad no lo haya recibido. El estado se documenta como "resultado desconocido" y exige revisión manual antes de emitir un reemplazo.
+- **RN-13:** un documento en `FALLIDO` no implica que la autoridad no lo haya recibido. `FALLIDO` significa que no hubo desenlace y hace falta una persona; el historial dice cuál de estos casos fue: no salió de aquí, llegó y está radicado sin veredicto, o no se sabe si llegó. Solo el último exige verificar ante la autoridad antes de emitir un reemplazo. **Precisada en la auditoría final, ver ADR-0015.**
 
 > RN-13 es deliberada. La tentación es tratar `FALLIDO` como "no pasó nada" y reintentar con un documento nuevo, pero si la autoridad alcanzó a recibir el original se produciría una duplicación. Reconocer la incertidumbre en el modelo es preferible a esconderla.
 
@@ -295,4 +295,5 @@ Se registran para dejar constancia de que fueron evaluados y descartados por dec
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-09-24 | Versión inicial. 25 requerimientos funcionales, 13 reglas de negocio, 12 requerimientos no funcionales. |
+| 1.2 | 2026-10-02 | RN-13 precisada: decía que `FALLIDO` se documenta como "resultado desconocido", y la sección 6.2 también lleva a `FALLIDO` cuando no se pudo generar o firmar, que tiene un resultado conocido. Ver ADR-0015. |
 | 1.1 | 2026-10-02 | RN-06 precisada: decía "el redondeo se aplica sobre el total del documento", que solo coincide con la suma de los subtotales declarados cuando hay un grupo de impuesto. La intención —no redondear línea por línea— no cambia. Ver ADR-0016. |

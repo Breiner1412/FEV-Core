@@ -182,7 +182,7 @@ Esta sección existe porque un despliegue de verdad no es este comando con otra 
 |---|---|
 | `CERTIFICADO_NO_CONFIGURADO` al firmar | Faltan `Firma__CertificadoBase64` o `Firma__Clave`. |
 | Los documentos se quedan en `RECIBIDO` | El trabajador está apagado (`Salida__Habilitado`) o el simulador no responde. |
-| Los documentos acaban en `FALLIDO` | El servicio de validación no contesta. Con el simulador, comprueba su modo en `GET /salud`. |
+| Los documentos acaban en `FALLIDO` | Mira el detalle de la última transición en `GET /api/v1/documentos/{id}/historial`. `RESULTADO DESCONOCIDO` o `RADICADO SIN VEREDICTO`: el servicio de validación no contesta (con el simulador, comprueba su modo en `GET /salud`). `NO SALIO DE AQUI`: falló algo propio antes de enviar, como el certificado o el rango; los registros dicen qué. |
 | `RANGO_NO_DISPONIBLE` al emitir | No hay rango vigente para ese tipo y esa fecha *(RN-02)*. |
 | La API no arranca y habla de la conexión | PostgreSQL todavía no está listo, o la cadena de conexión apunta a otro sitio. |
 

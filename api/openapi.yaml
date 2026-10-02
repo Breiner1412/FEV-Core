@@ -907,8 +907,10 @@ components:
         - `TRANSMITIDO`: entregado al servicio de validación, esperando veredicto.
         - `APROBADO`: validado. Estado terminal.
         - `RECHAZADO`: rechazado por la autoridad. Estado terminal.
-        - `FALLIDO`: no se pudo completar el proceso. **Resultado desconocido**:
-          no implica que la autoridad no lo haya recibido (RN-13). Estado terminal.
+        - `FALLIDO`: sin desenlace; hace falta una persona. No implica que la
+          autoridad no lo haya recibido (RN-13). El detalle de su transición en
+          el historial dice qué consta y si hay que verificar ante la autoridad
+          antes de reemplazarlo (ADR-0015). Estado terminal.
       enum: [RECIBIDO, EN_PROCESO, TRANSMITIDO, APROBADO, RECHAZADO, FALLIDO]
 
     TipoImpuesto:
