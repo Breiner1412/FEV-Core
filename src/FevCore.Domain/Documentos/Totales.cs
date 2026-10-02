@@ -8,8 +8,11 @@ namespace FevCore.Domain.Documentos;
 /// Se calculan siempre a partir de las lineas. Nunca se reciben desde
 /// afuera ni se editan (INV-TOT-01).
 ///
-/// El redondeo se aplica AQUI, una sola vez, sobre los totales del
-/// documento — no linea por linea (RN-06, INV-TOT-02).
+/// El redondeo nunca es linea por linea (RN-06, INV-TOT-02). Los importes
+/// se redondean una vez sobre el documento; los impuestos, una vez por
+/// grupo de tipo y tarifa, y el total es la suma de los grupos (ADR-0016).
+/// Asi el impuesto total es exactamente la suma de los subtotales que el
+/// documento declara.
 /// </summary>
 public sealed record Totales
 {
@@ -50,23 +53,23 @@ public sealed record Totales
         // 1. Acumular con precision completa, sin redondear nada.
         var brutoExacto = Dinero.Cero;
         var descuentosExacto = Dinero.Cero;
-        var impuestosExacto = Dinero.Cero;
 
         foreach (var linea in lineas)
         {
             brutoExacto += linea.PrecioUnitario * linea.Cantidad;
             descuentosExacto += linea.Descuento;
-
-            foreach (var impuesto in linea.Impuestos)
-            {
-                impuestosExacto += impuesto.Valor;
-            }
         }
 
         // 2. Redondear una sola vez, aqui (RN-06).
         var totalBruto = brutoExacto.Redondear();
         var totalDescuentos = descuentosExacto.Redondear();
-        var totalImpuestos = impuestosExacto.Redondear();
+
+        // El impuesto total es la suma de los grupos, cada uno ya redondeado
+        // una vez. Redondear la suma exacta de todo daria otro numero cuando
+        // dos grupos caen en medio centavo, y el documento declararia un
+        // total que no es la suma de sus subtotales (ADR-0016).
+        var totalImpuestos = SubtotalImpuesto.Agrupar(lineas)
+            .Aggregate(Dinero.Cero, (suma, grupo) => suma + grupo.Valor);
 
         // 3. Derivar el resto de los valores YA redondeados, para que los
         //    numeros que el documento declara cuadren entre si. Si cada uno

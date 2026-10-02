@@ -194,7 +194,7 @@ Tres decisiones tomadas antes de redactar este documento condicionan varios requ
 | **RN-03** | Una nota crédito o débito debe referenciar una factura que exista en el sistema y se encuentre aprobada. | Coherencia documental. |
 | **RN-04** | La suma de las notas crédito asociadas a una factura no puede superar el valor total de esa factura. | Coherencia contable. |
 | **RN-05** | Una nota crédito o débito no puede referenciar a otra nota crédito o débito. | Coherencia documental. |
-| **RN-06** | El impuesto se calcula sobre la base gravable de cada línea aplicando la tarifa del producto, pero el redondeo se aplica sobre el total del documento, no línea por línea. | Consistencia con la validación de la autoridad, que compara el total declarado contra la sumatoria. |
+| **RN-06** | El impuesto se calcula sobre la base gravable de cada línea aplicando la tarifa del producto. El redondeo nunca se aplica línea por línea: se aplica una vez por cada grupo de tipo y tarifa sobre todo el documento, y el impuesto total es la suma de los grupos. **Precisada en la auditoría final, ver ADR-0016.** | Consistencia con la validación de la autoridad, que compara el total declarado contra la sumatoria. |
 | **RN-07** | Un documento rechazado por la autoridad no puede corregirse ni retransmitirse. La corrección exige emitir un documento nuevo, con número nuevo. | Ver nota al pie. |
 | **RN-08** | Un documento debe tener al menos una línea de detalle, y toda línea debe tener cantidad y precio mayores que cero. | Coherencia básica. |
 | **RN-09** | El total del documento es la suma de las bases gravables más la suma de los impuestos, menos los descuentos. Este valor debe coincidir exactamente con el declarado en el XML. | Requisito de validación. |
@@ -295,3 +295,4 @@ Se registran para dejar constancia de que fueron evaluados y descartados por dec
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-09-24 | Versión inicial. 25 requerimientos funcionales, 13 reglas de negocio, 12 requerimientos no funcionales. |
+| 1.1 | 2026-10-02 | RN-06 precisada: decía "el redondeo se aplica sobre el total del documento", que solo coincide con la suma de los subtotales declarados cuando hay un grupo de impuesto. La intención —no redondear línea por línea— no cambia. Ver ADR-0016. |

@@ -281,7 +281,7 @@ No es una entidad independiente sino un conjunto de valores calculados que viven
 
 **Invariantes**
 - `INV-TOT-01`: se calculan siempre a partir de las líneas. Nunca se reciben desde afuera ni se editan.
-- `INV-TOT-02`: el redondeo se aplica en este nivel, sobre el total, no línea por línea. *(RN-06)*
+- `INV-TOT-02`: el redondeo se aplica en este nivel, nunca línea por línea: una vez por grupo de impuesto (tipo y tarifa), y el impuesto total es la suma de los grupos. *(RN-06, ADR-0016)*
 
 > **Por qué importa el nivel del redondeo.** Si cada línea se redondea por separado, la suma de las líneas redondeadas puede diferir en unos pesos del total calculado sobre los valores exactos. La validación de la autoridad compara ambos y rechaza el documento por inconsistencia. Es un error documentado en implementaciones reales, y la causa de rechazos que parecen inexplicables.
 
@@ -427,7 +427,7 @@ Dónde queda garantizada cada regla de la etapa 2.
 | RN-03 — Nota referencia factura aprobada | `INV-DOC-03` |
 | RN-04 — Notas no superan la factura | Verificación al emitir, sobre el agregado `Documento` referenciado |
 | RN-05 — Nota no referencia nota | `INV-DOC-03` + `INV-DOC-04` |
-| RN-06 — Redondeo sobre el total | `INV-IMP-02` + `INV-TOT-02` |
+| RN-06 — Redondeo por grupo, nunca por línea | `INV-IMP-02` + `INV-TOT-02` |
 | RN-07 — Rechazado no se corrige | Máquina de estados: `RECHAZADO` es terminal |
 | RN-08 — Líneas válidas | `INV-DOC-01` + `INV-LIN-01` |
 | RN-09 — Total coherente | `INV-DOC-02` |

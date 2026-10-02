@@ -115,6 +115,14 @@ public sealed class Documento
     /// </summary>
     public IReadOnlyList<TransicionEstado> Transiciones => _transiciones;
 
+    /// <summary>
+    /// Los impuestos del documento por grupo de tipo y tarifa, cada uno
+    /// redondeado una vez (RN-06, ADR-0016). Metodo y no propiedad: se
+    /// calcula de las lineas, no se guarda.
+    /// </summary>
+    public IReadOnlyList<SubtotalImpuesto> ImpuestosPorGrupo() =>
+        SubtotalImpuesto.Agrupar(_lineas);
+
     /// <summary>Cada intento de entrega al servicio de validacion (RF-18).</summary>
     public IReadOnlyList<Transmision> Transmisiones => _transmisiones;
 
