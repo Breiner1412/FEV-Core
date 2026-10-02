@@ -24,6 +24,20 @@ public sealed class LineaTests
 
     // ── Calculo ──
 
+    /// <summary>
+    /// INV-LIN-03. La coleccion de impuestos no se puede modificar desde
+    /// afuera ni siquiera convirtiendola de vuelta a List. El comentario de
+    /// la propiedad lo prometia desde H1 y devolvia la lista tal cual.
+    /// </summary>
+    [Fact]
+    public void Los_impuestos_de_una_linea_no_se_pueden_modificar_desde_afuera()
+    {
+        var linea = CrearLineaValida();
+
+        Assert.IsNotType<List<ImpuestoLinea>>(linea.Impuestos);
+        Assert.False(linea.Impuestos is ICollection<ImpuestoLinea> { IsReadOnly: false });
+    }
+
     [Fact]
     public void La_base_gravable_es_cantidad_por_precio()
     {

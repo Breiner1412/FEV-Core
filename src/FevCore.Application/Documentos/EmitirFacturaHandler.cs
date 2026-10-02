@@ -83,7 +83,7 @@ public sealed class EmitirFacturaHandler(
         // FUERA a proposito. Dentro de la transaccion la fila del rango esta
         // bloqueada y cualquier otra emision espera: lo unico que debe pasar
         // aqui es tomar el numero y guardar. Cuanto menos tiempo dure, mas
-        // facturas por segundo aguanta el sistema (RNF-01).
+        // facturas por segundo aguanta el sistema (RNF-03, RNF-06).
         await using var transaccion =
             await unidadDeTrabajo.IniciarTransaccionAsync(cancelacion);
 

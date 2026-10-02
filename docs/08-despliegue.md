@@ -25,7 +25,7 @@ Arranca tres contenedores:
 | `simulador` | Servicio de validación simulado | 5108 |
 | `api` | FEV-Core | 8080 |
 
-La API aplica las migraciones al arrancar y, fuera de producción, crea un integrador de desarrollo cuya llave aparece en los registros:
+La API aplica las migraciones al arrancar y, en el entorno `Development` (el que usa `docker compose`), crea un integrador de desarrollo cuya llave aparece en los registros. En cualquier otro entorno no se crea ninguno:
 
 ```bash
 docker compose logs api | grep "Llave de API"

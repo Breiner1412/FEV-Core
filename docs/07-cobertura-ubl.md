@@ -71,7 +71,7 @@ notas añaden `cac:BillingReference` apuntando a la factura corregida.
 | Elemento del estándar | Por qué se omite |
 |---|---|
 | `cac:Signature` | El bloque descriptivo de UBL sobre quién firma. La firma real va en `ext:UBLExtensions`, que sí se emite desde la etapa 6. |
-| `cbc:CityName`, `cbc:CountrySubentity` | El sistema guarda el **código** de municipio, no su nombre ni el del departamento. Añadirlos exigiría incorporar el listado oficial de municipios, que es trabajo de H8 *(validar códigos contra listas oficiales)*. La DIAN los exige; hoy es una omisión conocida, no un descuido. |
+| `cbc:CityName`, `cbc:CountrySubentity` | El sistema guarda el **código** de municipio, no su nombre ni el del departamento. Añadirlos exigiría incorporar el listado oficial de municipios. El plan lo situaba en H8 *(validar códigos contra listas oficiales)* y no se hizo: los códigos se comprueban que vengan, no que existan (`08-despliegue.md`, sección 6). La DIAN los exige; hoy es una omisión conocida, no un descuido. |
 | `cac:PaymentMeans`, `cac:PaymentTerms` | La forma de pago aparece en RF-11 pero el modelo de dominio no la capturó. Es una **inconsistencia entre requisitos e implementación**, registrada en la sección 4. |
 | `cac:Delivery`, `cac:AllowanceCharge` a nivel de documento | Fuera del alcance declarado en la visión. Los descuentos existen solo a nivel de línea. |
 | `cac:WithholdingTaxTotal` | Las retenciones están excluidas explícitamente en `01-vision-alcance.md`. |

@@ -37,8 +37,12 @@ public sealed class Linea
     /// <summary>
     /// Solo lectura de verdad: el tipo que se devuelve no se puede
     /// convertir de vuelta a List para modificarlo desde afuera.
+    ///
+    /// Hasta la auditoria final este comentario lo prometia y la propiedad
+    /// devolvia la lista tal cual. Entity Framework no pasa por aqui: lee y
+    /// escribe el campo (PropertyAccessMode.Field).
     /// </summary>
-    public IReadOnlyList<ImpuestoLinea> Impuestos => _impuestos;
+    public IReadOnlyList<ImpuestoLinea> Impuestos => _impuestos.AsReadOnly();
 
     /// <summary>Base gravable mas la suma de los impuestos.</summary>
     public Dinero Total { get; }
