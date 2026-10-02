@@ -17,7 +17,7 @@ public sealed class OpcionesSalida
 
     /// <summary>
     /// Cuantas veces se intenta antes de rendirse. Al agotarse, el documento
-    /// pasa a FALLIDO, que significa resultado desconocido (RN-13).
+    /// pasa a FALLIDO, que exige revision manual (RN-13).
     /// </summary>
     public int MaximoIntentos { get; set; } = 5;
 

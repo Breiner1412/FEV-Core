@@ -44,14 +44,23 @@ public sealed class ProveedorValidacionHttp(
                 respuesta.StatusCode == HttpStatusCode.OK)
             {
                 var aceptada = JsonSerializer.Deserialize<CuerpoTransmision>(cuerpo, Json);
+                var seguimiento = aceptada?.IdentificadorSeguimiento;
 
-                return string.IsNullOrWhiteSpace(aceptada?.IdentificadorSeguimiento)
+                // ADR-0015. Un 2xx dice que el documento llego. Sin un
+                // identificador que se pueda guardar y consultar, no hay forma
+                // de saber que paso despues: eso es "no se sabe", no "no
+                // llego". ADR-0014 lo trataba como ErrorTransitorio, y al
+                // agotarse los intentos el historial afirmaba que el documento
+                // no habia llegado.
+                return string.IsNullOrWhiteSpace(seguimiento) ||
+                       seguimiento.Length > Transmision.LongitudMaximaSeguimiento
                     ? new ResultadoEnvio(
-                        ResultadoTransmision.ErrorTransitorio,
-                        RespuestaCruda: "Aceptada sin identificador de seguimiento.")
+                        ResultadoTransmision.SinRespuesta,
+                        RespuestaCruda: "Aceptada sin identificador de seguimiento utilizable: " +
+                                        cuerpo)
                     : new ResultadoEnvio(
                         ResultadoTransmision.Aceptada,
-                        aceptada.IdentificadorSeguimiento,
+                        seguimiento,
                         cuerpo);
             }
 

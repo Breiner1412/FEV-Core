@@ -37,6 +37,14 @@ public enum ResultadoTransmision
 public sealed class Transmision
 {
     /// <summary>
+    /// El identificador de seguimiento mas largo que se puede guardar. Uno
+    /// mas largo no se puede conservar, y sin conservarlo no hay forma de
+    /// consultar el veredicto: quien lo recibe lo trata como si no hubiera
+    /// venido (ADR-0015).
+    /// </summary>
+    public const int LongitudMaximaSeguimiento = 100;
+
+    /// <summary>
     /// Posicion en la serie de intentos, empezando en 1. Identifica la
     /// transmision junto con su documento: no existe fuera de el.
     /// </summary>

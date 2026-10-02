@@ -302,7 +302,8 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
 
             transmision.Property(t => t.EnviadaEn).IsRequired();
 
-            transmision.Property(t => t.IdentificadorSeguimiento).HasMaxLength(100);
+            transmision.Property(t => t.IdentificadorSeguimiento)
+                .HasMaxLength(Domain.Documentos.Transmision.LongitudMaximaSeguimiento);
 
             transmision.Property(t => t.Resultado)
                 .HasConversion<string>()

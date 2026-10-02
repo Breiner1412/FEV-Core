@@ -235,6 +235,9 @@ public sealed class CicloCompletoTests(FabricaApiConBaseDeDatos fabrica)
 
         // Un solo intento, no tres.
         Assert.Equal(1, fabrica.Validacion.TransmisionesIntentadas);
+
+        // Llego al servicio y este rechazo la entrega: no quedo radicado.
+        Assert.StartsWith("NO RADICADO", await DetalleDeLaUltimaTransicion(cliente, id));
     }
 
     // ── CE-04 y RN-13: un fallo no previsto tampoco deja el documento a medias ──
@@ -258,6 +261,11 @@ public sealed class CicloCompletoTests(FabricaApiConBaseDeDatos fabrica)
 
         Assert.Equal("FALLIDO", await Estado(cliente, id));
         Assert.Equal(3, fabrica.Validacion.TransmisionesIntentadas);
+
+        // El procesador no sabe si la peticion salio antes de la excepcion:
+        // no puede afirmar que no llego (RN-13, ADR-0015).
+        Assert.StartsWith(
+            "RESULTADO DESCONOCIDO", await DetalleDeLaUltimaTransicion(cliente, id));
     }
 
     /// <summary>
@@ -275,6 +283,11 @@ public sealed class CicloCompletoTests(FabricaApiConBaseDeDatos fabrica)
 
         Assert.Equal("FALLIDO", await Estado(cliente, id));
         Assert.Equal(3, fabrica.Validacion.ConsultasRealizadas);
+
+        // La entrega fue aceptada: consta que llego, falta el veredicto.
+        // Antes el historial decia "no consta que el documento llegara".
+        Assert.StartsWith(
+            "RADICADO SIN VEREDICTO", await DetalleDeLaUltimaTransicion(cliente, id));
     }
 
     // ── RNF-05: consultar hasta tener veredicto ──

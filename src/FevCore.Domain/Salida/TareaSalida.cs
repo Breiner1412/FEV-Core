@@ -136,8 +136,7 @@ public sealed class TareaSalida
 
     /// <summary>
     /// Se agotaron los intentos. La tarea deja de reintentarse, y el
-    /// documento pasa a FALLIDO, que significa resultado desconocido y
-    /// exige revision manual (RN-13).
+    /// documento pasa a FALLIDO, que exige revision manual (RN-13).
     /// </summary>
     public void Agotar(string error, DateTimeOffset momento)
     {

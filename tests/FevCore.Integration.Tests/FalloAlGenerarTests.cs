@@ -59,7 +59,10 @@ public sealed class FalloAlGenerarTests(FabricaApiConBaseDeDatos fabrica)
 
         Assert.Equal("FALLIDO", documento.GetProperty("estado").GetString());
 
-        // Nunca se intento entregar: no llego a haber XML que mandar.
+        // Nunca se intento entregar: no llego a haber XML que mandar. Y el
+        // historial lo dice, para que nadie investigue ante la DIAN un
+        // documento que no salio (RN-13, ADR-0015).
         Assert.Equal(0, fabrica.Validacion.TransmisionesIntentadas);
+        Assert.StartsWith("NO SALIO DE AQUI", await DetalleDeLaUltimaTransicion(cliente, id));
     }
 }

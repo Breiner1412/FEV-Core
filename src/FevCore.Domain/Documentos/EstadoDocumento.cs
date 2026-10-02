@@ -25,8 +25,10 @@ public enum EstadoDocumento
     Rechazado,
 
     /// <summary>
-    /// No se pudo completar el proceso. RESULTADO DESCONOCIDO: no implica
-    /// que la autoridad no lo haya recibido (RN-13). Estado terminal.
+    /// No se llego a un desenlace y hace falta una persona. No implica que la
+    /// autoridad no lo haya recibido: el detalle de la transicion dice que
+    /// consta, y si hay que verificar ante la DIAN (RN-13, ADR-0015).
+    /// Estado terminal.
     /// </summary>
     Fallido
 }

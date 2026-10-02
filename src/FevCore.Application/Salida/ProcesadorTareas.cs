@@ -147,8 +147,7 @@ public sealed class ProcesadorTareas(
             await firmador.EjecutarAsync(documento.Id, cancelacion);
         }
 
-        var envio = await validacion.TransmitirAsync(
-            documento.NumeroCompleto, documento.XmlFirmado!, cancelacion);
+        var envio = await TransmitirSinSuponerAsync(documento, cancelacion);
 
         var momento = reloj.GetUtcNow();
 
@@ -195,6 +194,36 @@ public sealed class ProcesadorTareas(
         }
 
         await tareas.GuardarCambiosAsync(cancelacion);
+    }
+
+    /// <summary>
+    /// Transmite, y si el proveedor lanza algo que nadie previo, lo registra
+    /// como envio sin respuesta (RN-13, ADR-0015).
+    ///
+    /// Desde aqui no se puede saber si la peticion salio antes de la
+    /// excepcion. Sin este registro el intento no dejaba rastro, y al
+    /// agotarse los intentos el historial afirmaba que el documento no habia
+    /// salido. Una cancelacion por apagado no se traduce: se propaga.
+    /// </summary>
+    private async Task<ResultadoEnvio> TransmitirSinSuponerAsync(
+        Documento documento,
+        CancellationToken cancelacion)
+    {
+        try
+        {
+            return await validacion.TransmitirAsync(
+                documento.NumeroCompleto, documento.XmlFirmado!, cancelacion);
+        }
+        catch (Exception error) when (!cancelacion.IsCancellationRequested)
+        {
+            registrador.LogError(
+                error, "Fallo no previsto al transmitir {Documento}. Resultado desconocido.",
+                documento.Id);
+
+            return new ResultadoEnvio(
+                ResultadoTransmision.SinRespuesta,
+                RespuestaCruda: $"Fallo no previsto al transmitir: {error.Message}");
+        }
     }
 
     // ── Preguntar por el veredicto ──
@@ -254,11 +283,12 @@ public sealed class ProcesadorTareas(
     /// <summary>
     /// Devuelve la tarea a la bandeja, o se rinde si ya no quedan intentos.
     ///
-    /// Rendirse significa marcar el documento como FALLIDO, que NO quiere
-    /// decir "no llego" sino "no se sabe" (RN-13). Por eso el documento
-    /// conserva todas sus transmisiones: son la unica forma de distinguir un
-    /// servicio que nunca contesto de uno que recibio el documento y se
-    /// quedo callado.
+    /// Rendirse significa marcar el documento como FALLIDO: sin desenlace,
+    /// hace falta una persona (RN-13). FALLIDO no dice por si solo que paso;
+    /// lo dice el historial, a partir de las transmisiones, que el documento
+    /// conserva todas por eso: son la unica forma de distinguir un servicio
+    /// que nunca contesto de uno que recibio el documento y se quedo callado
+    /// (ADR-0015).
     /// </summary>
     private async Task RendirseOReprogramar(
         TareaSalida tarea,

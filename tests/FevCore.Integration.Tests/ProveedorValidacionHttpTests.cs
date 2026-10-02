@@ -71,17 +71,29 @@ public sealed class ProveedorValidacionHttpTests
         Assert.Equal("SEG-001", resultado.IdentificadorSeguimiento);
     }
 
-    [Fact]
-    public async Task Una_respuesta_aceptada_sin_seguimiento_se_trata_como_transitoria()
+    /// <summary>
+    /// ADR-0015, que sustituye a ADR-0014 en este punto. Un 2xx dice que el
+    /// documento LLEGO; sin un identificador de seguimiento utilizable no hay
+    /// forma de consultar que paso despues. Eso no es "no llego", que es lo
+    /// que significa ErrorTransitorio: es "no se sabe", SinRespuesta.
+    ///
+    /// Utilizable incluye que quepa donde se guarda: uno mas largo que su
+    /// columna hacia fallar el guardado en cada intento.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Accepted, "{}")]
+    [InlineData(HttpStatusCode.OK, "{}")]
+    [InlineData(HttpStatusCode.Accepted, """{"identificadorSeguimiento":"   "}""")]
+    [InlineData(HttpStatusCode.Accepted, """{"identificadorSeguimiento":"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"}""")]
+    public async Task Una_respuesta_aceptada_sin_seguimiento_utilizable_deja_el_resultado_desconocido(
+        HttpStatusCode codigo, string cuerpo)
     {
-        var proveedor = ConRespuesta(HttpStatusCode.Accepted, "{}");
+        var proveedor = ConRespuesta(codigo, cuerpo);
 
         var resultado = await proveedor.TransmitirAsync("SETP990000001", "<xml/>");
 
-        // Aceptar sin devolver con que consultar despues deja al documento
-        // sin forma de averiguar su veredicto. Darlo por bueno seria
-        // perderlo: mejor reintentar.
-        Assert.Equal(ResultadoTransmision.ErrorTransitorio, resultado.Resultado);
+        Assert.Equal(ResultadoTransmision.SinRespuesta, resultado.Resultado);
+        Assert.Null(resultado.IdentificadorSeguimiento);
     }
 
     [Theory]

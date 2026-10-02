@@ -600,22 +600,54 @@ public sealed class Documento
     }
 
     /// <summary>
-    /// El sistema no logro completar el proceso (RN-13).
+    /// El sistema no logro llevar el documento a un desenlace (RN-13).
     ///
-    /// FALLIDO no significa que el documento no llegara: significa que NO SE
-    /// SABE. Si hubo una transmision sin respuesta, la autoridad pudo
-    /// haberlo recibido. Por eso exige revision manual antes de emitir un
-    /// reemplazo, y por eso las transmisiones se conservan todas.
+    /// FALLIDO significa eso y que hace falta una persona. No dice por si
+    /// solo que paso: lo dice el detalle de esta transicion, que distingue
+    /// los casos segun lo que consta en las transmisiones (ADR-0015). Solo
+    /// uno obliga a verificar ante la DIAN antes de emitir un reemplazo.
+    ///
+    /// Antes habia dos textos, "resultado desconocido" y "no consta que
+    /// llegara", y el segundo se escribia tambien cuando la autoridad SI
+    /// habia recibido el documento y devuelto con que consultarlo.
     /// </summary>
     public void RegistrarFallo(string motivo, DateTimeOffset momento) =>
         Transicionar(
             EstadoDocumento.Fallido,
             motivo,
             momento,
-            detalle: HuboEnvioSinRespuesta
-                ? "RESULTADO DESCONOCIDO: hubo al menos un envio sin respuesta. " +
-                  "El documento pudo haber llegado a la autoridad."
-                : "No se completo el proceso. No consta que el documento llegara.");
+            detalle: DesenlaceDelFallo());
+
+    /// <summary>
+    /// Que consta del documento ante la autoridad, del caso mas informativo
+    /// al menos. Una entrega aceptada va primero: si consta que llego, un
+    /// envio anterior sin respuesta ya no deja la duda de si llego.
+    /// </summary>
+    private string DesenlaceDelFallo()
+    {
+        if (IdentificadorSeguimiento is { } seguimiento)
+        {
+            return $"RADICADO SIN VEREDICTO: la autoridad recibio el documento " +
+                   $"(seguimiento {seguimiento}) y no se obtuvo su veredicto. " +
+                   "Consultarlo con ese identificador; no hace falta verificar si llego.";
+        }
+
+        if (HuboEnvioSinRespuesta)
+        {
+            return "RESULTADO DESCONOCIDO: hubo al menos un envio sin respuesta y " +
+                   "el documento pudo haber llegado a la autoridad. Verificar ante " +
+                   "la DIAN antes de emitir un reemplazo.";
+        }
+
+        if (_transmisiones.Any(t => t.Resultado == ResultadoTransmision.ErrorDefinitivo))
+        {
+            return "NO RADICADO: el servicio de validacion rechazo la entrega. " +
+                   "Se puede reemplazar sin verificar ante la DIAN.";
+        }
+
+        return "NO SALIO DE AQUI: ningun envio llego a la autoridad. " +
+               "Se puede reemplazar sin verificar ante la DIAN.";
+    }
 
     /// <summary>
     /// Si algun intento salio sin que volviera respuesta. Es lo que separa
