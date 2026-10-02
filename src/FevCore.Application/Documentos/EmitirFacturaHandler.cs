@@ -25,31 +25,29 @@ public sealed class EmitirFacturaHandler(
     IRepositorioTareas tareas,
     TimeProvider reloj)
 {
-    public async Task<ResultadoEmision> EjecutarAsync(
+    /// <summary>RF-15: ver EmisionIdempotente.</summary>
+    public Task<ResultadoEmision> EjecutarAsync(
         ComandoEmitirFactura comando,
-        CancellationToken cancelacion = default)
-    {
-        // ── 1. RF-15: antes de nada, verificar si esta peticion ya llego ──
-        // Va primero, ANTES de tomar consecutivo, para que un reintento no
-        // consuma un numero nuevo.
-        var existente = await repositorio.BuscarPorReferenciaExternaAsync(
+        CancellationToken cancelacion = default) =>
+        EmisionIdempotente.EjecutarAsync(
+            repositorio,
             comando.IntegradorId,
             comando.ReferenciaExterna,
+            () => EmitirNuevaAsync(comando, cancelacion),
             cancelacion);
 
-        if (existente is not null)
-        {
-            return new ResultadoEmision(existente, YaExistia: true);
-        }
-
-        // ── 2. RF-05: el emisor debe estar configurado ──
+    private async Task<Documento> EmitirNuevaAsync(
+        ComandoEmitirFactura comando,
+        CancellationToken cancelacion)
+    {
+        // ── 1. RF-05: el emisor debe estar configurado ──
         var emisor = await repositorioEmisor.ObtenerAsync(cancelacion)
             ?? throw new ExcepcionDominio(
                 "EMISOR_INCOMPLETO",
                 "El emisor no ha sido configurado. Configurelo en PUT /api/v1/emisor " +
                 "antes de emitir documentos.");
 
-        // ── 3. El adquirente debe existir y estar activo ──
+        // ── 2. El adquirente debe existir y estar activo ──
         var adquirente = await repositorioAdquirentes.ObtenerPorIdAsync(
             comando.AdquirenteId, cancelacion)
             ?? throw new ExcepcionDominio(
@@ -64,7 +62,7 @@ public sealed class EmitirFacturaHandler(
                 "y no puede recibir documentos nuevos.");
         }
 
-        // ── 4. Los productos, en UNA sola consulta ──
+        // ── 3. Los productos, en UNA sola consulta ──
         // Pedirlos uno por uno dentro del bucle de lineas seria el problema
         // N+1: una factura de diez lineas haria diez viajes a la base.
         var productos = await repositorioProductos.ObtenerPorIdsAsync(
@@ -79,7 +77,7 @@ public sealed class EmitirFacturaHandler(
         // declara, que es la colombiana, no la UTC (RN-02, INV-RAN-04).
         var fechaCivil = HoraColombia.Fecha(fechaEmision);
 
-        // ── 5. Numero y guardado, en una sola transaccion ──
+        // ── 4. Numero y guardado, en una sola transaccion ──
         //
         // Todo lo anterior (validaciones, catalogo, calculo de lineas) quedo
         // FUERA a proposito. Dentro de la transaccion la fila del rango esta
@@ -134,6 +132,6 @@ public sealed class EmitirFacturaHandler(
 
         await transaccion.ConfirmarAsync(cancelacion);
 
-        return new ResultadoEmision(documento, YaExistia: false);
+        return documento;
     }
 }

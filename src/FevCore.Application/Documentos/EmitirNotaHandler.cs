@@ -33,19 +33,21 @@ public sealed class EmitirNotaHandler(
     IRepositorioTareas tareas,
     TimeProvider reloj)
 {
-    public async Task<ResultadoEmision> EjecutarAsync(
+    /// <summary>RF-15: ver EmisionIdempotente.</summary>
+    public Task<ResultadoEmision> EjecutarAsync(
         ComandoEmitirNota comando,
-        CancellationToken cancelacion = default)
+        CancellationToken cancelacion = default) =>
+        EmisionIdempotente.EjecutarAsync(
+            repositorio,
+            comando.IntegradorId,
+            comando.ReferenciaExterna,
+            () => EmitirNuevaAsync(comando, cancelacion),
+            cancelacion);
+
+    private async Task<Documento> EmitirNuevaAsync(
+        ComandoEmitirNota comando,
+        CancellationToken cancelacion)
     {
-        // ── 1. RF-15: si esta peticion ya llego, devolver lo mismo ──
-        var existente = await repositorio.BuscarPorReferenciaExternaAsync(
-            comando.IntegradorId, comando.ReferenciaExterna, cancelacion);
-
-        if (existente is not null)
-        {
-            return new ResultadoEmision(existente, YaExistia: true);
-        }
-
         var emisor = await repositorioEmisor.ObtenerAsync(cancelacion)
             ?? throw new ExcepcionDominio(
                 "EMISOR_INCOMPLETO",
@@ -62,7 +64,7 @@ public sealed class EmitirNotaHandler(
         // declara, que es la colombiana, no la UTC (RN-02, INV-RAN-04).
         var fechaCivil = HoraColombia.Fecha(fechaEmision);
 
-        // ── 2. Dos candados, siempre en este orden ──
+        // ── 1. Dos candados, siempre en este orden ──
         //
         // Primero la factura, despues el rango. El orden importa: si un caso
         // de uso tomara el rango antes que la factura y otro al reves, dos
@@ -145,6 +147,6 @@ public sealed class EmitirNotaHandler(
 
         await transaccion.ConfirmarAsync(cancelacion);
 
-        return new ResultadoEmision(nota, YaExistia: false);
+        return nota;
     }
 }

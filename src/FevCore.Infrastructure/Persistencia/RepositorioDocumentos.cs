@@ -2,6 +2,7 @@ using FevCore.Application.Abstracciones;
 using FevCore.Domain.Comun;
 using FevCore.Domain.Documentos;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace FevCore.Infrastructure.Persistencia;
 
@@ -177,6 +178,25 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
         CancellationToken cancelacion = default) =>
         await contexto.Documentos.AddAsync(documento, cancelacion);
 
-    public Task GuardarCambiosAsync(CancellationToken cancelacion = default) =>
-        contexto.SaveChangesAsync(cancelacion);
+    /// <summary>
+    /// Guarda, y traduce la violacion del indice de RF-15 a
+    /// ExcepcionReferenciaDuplicada: dos solicitudes con la misma referencia
+    /// llegaron a la vez y esta perdio la carrera. Cualquier otra violacion
+    /// sigue siendo un error y se propaga tal cual.
+    /// </summary>
+    public async Task GuardarCambiosAsync(CancellationToken cancelacion = default)
+    {
+        try
+        {
+            await contexto.SaveChangesAsync(cancelacion);
+        }
+        catch (DbUpdateException error) when (error.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: ConfiguracionDocumento.IndiceReferenciaExterna
+        })
+        {
+            throw new ExcepcionReferenciaDuplicada(error);
+        }
+    }
 }

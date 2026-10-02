@@ -20,6 +20,12 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
     /// </summary>
     private const string TipoColumnaDinero = "numeric(18,6)";
 
+    /// <summary>
+    /// Nombre del indice de RF-15. Publico porque el repositorio lo reconoce
+    /// al traducir una violacion de unicidad.
+    /// </summary>
+    public const string IndiceReferenciaExterna = "ix_documentos_integrador_referencia";
+
     public void Configure(EntityTypeBuilder<Documento> documento)
     {
         documento.ToTable("documentos");
@@ -126,7 +132,7 @@ public sealed class ConfiguracionDocumento : IEntityTypeConfiguration<Documento>
         // ── INV-DOC-06 (RF-15): reintentar no duplica ──
         documento.HasIndex(d => new { d.IntegradorId, d.ReferenciaExterna })
             .IsUnique()
-            .HasDatabaseName("ix_documentos_integrador_referencia");
+            .HasDatabaseName(IndiceReferenciaExterna);
 
         // ── Totales: viven dentro del documento, en sus mismas columnas ──
         documento.OwnsOne(d => d.Totales, totales =>
