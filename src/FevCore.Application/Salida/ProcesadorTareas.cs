@@ -41,6 +41,15 @@ public sealed class ProcesadorTareas(
             return false;
         }
 
+        // RNF-10: todo lo que se registre mientras se procesa esta tarea —aqui,
+        // en los casos de uso y en el proveedor de validacion— lleva el
+        // documento, para poder recuperar sus registros por su identificador.
+        using var alcanceRegistros = registrador.BeginScope(new Dictionary<string, object>
+        {
+            ["documentoId"] = tarea.DocumentoId,
+            ["tareaId"] = tarea.Id
+        });
+
         // Declarado fuera del try porque el catch necesita el documento, y
         // cargado DENTRO porque cargarlo tambien puede fallar. Fuera del try,
         // un documento que no se puede leer dejaba escapar la excepcion sin

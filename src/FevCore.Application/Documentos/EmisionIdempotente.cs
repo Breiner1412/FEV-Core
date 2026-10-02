@@ -1,5 +1,6 @@
 using FevCore.Application.Abstracciones;
 using FevCore.Domain.Documentos;
+using Microsoft.Extensions.Logging;
 
 namespace FevCore.Application.Documentos;
 
@@ -22,6 +23,29 @@ namespace FevCore.Application.Documentos;
 internal static class EmisionIdempotente
 {
     public static async Task<ResultadoEmision> EjecutarAsync(
+        IRepositorioDocumentos repositorio,
+        ILogger registrador,
+        Guid integradorId,
+        string referenciaExterna,
+        Func<Task<Documento>> emitir,
+        CancellationToken cancelacion)
+    {
+        var resultado = await EmitirUnaVezAsync(
+            repositorio, integradorId, referenciaExterna, emitir, cancelacion);
+
+        // RNF-10: el registro que une el documento con la peticion que lo
+        // creo. Se escribe dentro del scope de la peticion, que lleva su
+        // traceId; desde ahi se llega al resto de lo que paso en ella.
+        registrador.LogInformation(
+            "Documento {documentoId} ({numero}) recibido. Ya existia: {yaExistia}.",
+            resultado.Documento.Id,
+            resultado.Documento.NumeroCompleto,
+            resultado.YaExistia);
+
+        return resultado;
+    }
+
+    private static async Task<ResultadoEmision> EmitirUnaVezAsync(
         IRepositorioDocumentos repositorio,
         Guid integradorId,
         string referenciaExterna,

@@ -2,6 +2,7 @@ using FevCore.Application.Abstracciones;
 using FevCore.Domain.Comun;
 using FevCore.Domain.Documentos;
 using FevCore.Domain.Salida;
+using Microsoft.Extensions.Logging;
 
 namespace FevCore.Application.Documentos;
 
@@ -23,7 +24,8 @@ public sealed class EmitirFacturaHandler(
     IRepositorioRangos repositorioRangos,
     IUnidadDeTrabajo unidadDeTrabajo,
     IRepositorioTareas tareas,
-    TimeProvider reloj)
+    TimeProvider reloj,
+    ILogger<EmitirFacturaHandler> registrador)
 {
     /// <summary>RF-15: ver EmisionIdempotente.</summary>
     public Task<ResultadoEmision> EjecutarAsync(
@@ -31,6 +33,7 @@ public sealed class EmitirFacturaHandler(
         CancellationToken cancelacion = default) =>
         EmisionIdempotente.EjecutarAsync(
             repositorio,
+            registrador,
             comando.IntegradorId,
             comando.ReferenciaExterna,
             () => EmitirNuevaAsync(comando, cancelacion),
