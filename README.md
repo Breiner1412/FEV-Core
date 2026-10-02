@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: completo.** Los 9 hitos entregados, 361 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: completo.** Los 9 hitos entregados y una auditoría final, 393 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
 >
 > Si vas a mirar una sola cosa, que sea la [retrospectiva](docs/10-retrospectiva.md): qué se subestimó, qué salió mejor de lo esperado y qué haría diferente.
 
@@ -323,7 +323,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | 2 | [Requerimientos](docs/02-requerimientos.md) | 25 funcionales, 13 reglas de negocio, 12 no funcionales |
 | 3 | [Modelo de dominio](docs/03-modelo-dominio.md) | 12 entidades, 6 agregados, 33 invariantes |
 | 4 | [Arquitectura](docs/04-arquitectura.md) | Capas, flujos y estrategia de pruebas |
-| — | [Decisiones (ADR)](docs/adr/) | 14 decisiones con sus alternativas descartadas |
+| — | [Decisiones (ADR)](docs/adr/) | 16 decisiones con sus alternativas descartadas |
 | 5 | [Contrato de la API](docs/05-contrato-api.md) | Endpoints, códigos de error y guía de integración |
 | — | [Especificación OpenAPI](api/openapi.yaml) | El contrato en formato procesable |
 | 6 | [Plan de entregas](docs/06-plan-entregas.md) | Los 9 hitos y su definición de terminado |
@@ -340,7 +340,8 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 - **[Firma XAdES-EPES](docs/adr/0012-firma-xades.md)** — cómo se construye XAdES sobre lo que .NET sí trae, y los dos errores de canonicalización que costaron encontrar.
 - **[Generación del XML](docs/adr/0011-generacion-xml.md)** — por qué el UBL se escribe a mano, y qué garantiza (y qué no) validar contra el esquema oficial.
 - **[Orden de bloqueos](docs/adr/0010-orden-de-bloqueos.md)** — cómo se evita un interbloqueo por diseño, y por qué aquí el bloqueo no protege la experiencia sino la verdad del dato.
-- **[Resultado desconocido](docs/adr/0014-resultado-desconocido.md)** — por qué "no sé si llegó" es un desenlace distinto de "falló", y qué pasa si se confunden.
+- **[Resultado desconocido](docs/adr/0014-resultado-desconocido.md)** y **[qué se sabe de un FALLIDO](docs/adr/0015-desenlace-de-un-documento-fallido.md)** — por qué "no sé si llegó" es un desenlace distinto de "falló", y por qué la auditoría final tuvo que corregir el primero.
+- **[Redondeo por grupo de impuesto](docs/adr/0016-redondeo-por-grupo-de-impuesto.md)** — cuando una regla de negocio y el significado de un elemento UBL no podían cumplirse a la vez, y lo que no se ha podido verificar ante la DIAN.
 - **[Toma de tareas](docs/adr/0013-toma-de-tareas.md)** — cómo varios trabajadores se reparten la bandeja sin pisarse y sin retener una conexión mientras esperan a un tercero.
 
 ---

@@ -171,6 +171,7 @@ Esta sección existe porque un despliegue de verdad no es este comando con otra 
 - **El protocolo real es SOAP.** `IProveedorValidacion` existe para que cambiar del simulador al servicio real sea escribir otra implementación, pero esa implementación no está escrita.
 - **Los códigos de municipio y unidad de medida no se validan contra las listas oficiales.** Se comprueba que vengan, no que existan. Un código inventado pasaría por aquí y lo rechazaría la DIAN.
 - **`FALLIDO` exige intervención humana y no hay herramienta para ella.** Hay que mirar la base de datos.
+- **No hay forma de dar de alta un integrador fuera de `Development`.** La API exige una llave para todo, y la única que se crea es la del integrador de desarrollo, que solo se siembra en `Development`. En cualquier otro entorno el sistema arranca y nadie puede usarlo. El dominio ya sabe crear un integrador con una llave aleatoria y desactivarlo (`Integrador.Crear`, `Integrador.Desactivar`, con sus pruebas), pero no hay ni endpoint ni comando que lo invoque. Hasta que lo haya, el alta se haría insertando la fila a mano con la huella SHA-256 de la llave, nunca la llave *(ADR-0008)*.
 - **Sin límite de peticiones por integrador, sin métricas, sin alertas.** Relevante en un despliegue real, no en un ejercicio.
 - **Un solo emisor.** El modelo no lo impide, pero no está implementado ni probado.
 

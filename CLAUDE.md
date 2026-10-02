@@ -115,7 +115,9 @@ Tres proyectos: `Domain.Tests`, `Application.Tests`, `Integration.Tests`
 ## Estado
 
 **Proyecto completo.** Los 9 hitos (H0 a H8) entregados y fusionados en `main`.
-361 pruebas en verde, 14 ADR.
+Despues, una auditoria final (rama `auditoria/revision-final`): 393 pruebas en
+verde, 16 ADR. Lo que encontro y lo que quedo como deuda esta en
+`docs/10-retrospectiva.md`, seccion 7.
 
 No hay trabajo en curso. Cualquier cambio nuevo empieza por decidir si cabe en
 el alcance declarado en `docs/01-vision-alcance.md`, y si no cabe, por ampliarlo
