@@ -9,9 +9,23 @@ namespace FevCore.Api.Configuracion;
 ///
 /// SOLO en desarrollo. En un despliegue real las llaves se aprovisionan con
 /// un procedimiento administrativo, nunca solas ni escritas en los registros.
+///
+/// La llave por defecto esta escrita aqui y publicada en el README a
+/// proposito: es una credencial de desarrollo, para que cualquiera pueda
+/// seguir el recorrido, no un secreto (RNF-01). Por eso mismo solo puede
+/// existir donde la lista blanca lo permite.
+///
+/// Lista blanca, como EndpointsDesarrollo, y no la misma: aqui solo entra
+/// Development. Testing siembra su propia llave, y la publicada no tiene por
+/// que existir en las pruebas.
 /// </summary>
 public static class SemillaDesarrollo
 {
+    private static readonly string[] EntornosPermitidos = ["Development"];
+
+    public static bool EstaPermitidaEn(IWebHostEnvironment entorno) =>
+        EntornosPermitidos.Contains(entorno.EnvironmentName);
+
     /// <summary>
     /// Llave fija de desarrollo. Al no cambiar entre arranques se puede
     /// dejar guardada en una coleccion de peticiones.

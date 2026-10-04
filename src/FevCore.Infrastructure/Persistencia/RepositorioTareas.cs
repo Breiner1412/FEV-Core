@@ -63,15 +63,6 @@ public sealed class RepositorioTareas(FevCoreDbContext contexto) : IRepositorioT
         return tarea;
     }
 
-    public Task<TareaSalida?> ObtenerPorDocumentoAsync(
-        Guid documentoId,
-        TipoTarea tipo,
-        CancellationToken cancelacion = default) =>
-        contexto.TareasSalida
-            .Where(t => t.DocumentoId == documentoId && t.Tipo == tipo)
-            .OrderByDescending(t => t.CreadaEn)
-            .FirstOrDefaultAsync(cancelacion);
-
     public async Task AgregarAsync(
         TareaSalida tarea,
         CancellationToken cancelacion = default) =>
@@ -79,7 +70,4 @@ public sealed class RepositorioTareas(FevCoreDbContext contexto) : IRepositorioT
 
     public Task GuardarCambiosAsync(CancellationToken cancelacion = default) =>
         contexto.SaveChangesAsync(cancelacion);
-
-    public Task<int> ContarPendientesAsync(CancellationToken cancelacion = default) =>
-        contexto.TareasSalida.CountAsync(t => t.CompletadaEn == null, cancelacion);
 }

@@ -34,7 +34,11 @@ public sealed record RespuestaDocumento
     public required IReadOnlyList<RespuestaLinea> Lineas { get; init; }
     public required RespuestaTotales Totales { get; init; }
 
-    /// <summary>Nulo mientras el documento no este aprobado (RF-20).</summary>
+    /// <summary>
+    /// Nulo hasta que se genera el XML. Lo calcula el emisor al generarlo y
+    /// viaja dentro de el desde el primer envio (RF-20); no depende de que la
+    /// autoridad apruebe.
+    /// </summary>
     public string? CodigoUnico { get; init; }
 
     // ── Solo en notas ──

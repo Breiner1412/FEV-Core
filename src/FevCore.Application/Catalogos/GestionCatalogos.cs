@@ -121,9 +121,10 @@ public sealed class GestionAdquirentes(
     /// INV-ADQ-01: no pueden existir dos adquirentes activos con la misma
     /// identificacion.
     ///
-    /// Se comprueba aqui para poder devolver un error con sentido. La base
-    /// de datos no lo impide por si sola, porque la restriccion solo aplica
-    /// a los activos y eso requiere un indice parcial.
+    /// Se comprueba aqui para devolver un error con sentido en el caso
+    /// normal. Esta comprobacion sola no resiste dos altas simultaneas: las
+    /// dos la pasan. La que cierra la carrera es la base, con un indice unico
+    /// parcial sobre los activos; quien la pierde recibe este mismo error.
     /// </summary>
     private async Task ExigirIdentificacionLibre(
         DatosTributarios datos,

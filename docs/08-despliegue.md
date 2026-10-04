@@ -25,7 +25,7 @@ Arranca tres contenedores:
 | `simulador` | Servicio de validación simulado | 5108 |
 | `api` | FEV-Core | 8080 |
 
-La API aplica las migraciones al arrancar y, fuera de producción, crea un integrador de desarrollo cuya llave aparece en los registros:
+La API aplica las migraciones al arrancar y, en el entorno `Development` (el que usa `docker compose`), crea un integrador de desarrollo cuya llave aparece en los registros. En cualquier otro entorno no se crea ninguno:
 
 ```bash
 docker compose logs api | grep "Llave de API"
@@ -130,16 +130,47 @@ dotnet tool install --global dotnet-ef
 dotnet ef database update --project src/FevCore.Infrastructure --startup-project src/FevCore.Api
 ```
 
+Las herramientas de EF toman la cadena de conexión de la variable `ConnectionStrings__Principal` o, si no está, del `.env` de la raíz del repositorio. Si no la encuentran en ninguno, fallan diciendo qué falta: no hay un valor de respaldo con la contraseña escrita en el código *(RNF-01)*.
+
+### Actualizar una base que ya tiene datos
+
+La migración `IndicesUnicosCatalogos` vuelve únicos, solo entre los activos, la identificación de los adquirentes y el código de los productos. Antes de ella la base no lo impedía, y dos altas simultáneas podían dejar dos registros activos iguales.
+
+**Si la base ya tiene duplicados, la migración falla, y es lo correcto.** La alternativa sería crear el índice saltándose esas filas: la regla se cumpliría para lo nuevo y no para lo que ya está mal. Como la API aplica las migraciones al arrancar, el síntoma es que la API no arranca.
+
+Quien actualice una base con datos tiene que limpiarla primero. Para encontrar los duplicados:
+
+```sql
+SELECT "Datos_TipoIdentificacion", "Datos_Identificacion", count(*)
+FROM adquirentes WHERE "Activo"
+GROUP BY 1, 2 HAVING count(*) > 1;
+
+SELECT "Codigo", count(*)
+FROM productos WHERE "Activo"
+GROUP BY 1 HAVING count(*) > 1;
+```
+
+De cada grupo hay que decidir cuál es el bueno y desactivar los demás (`DELETE /api/v1/adquirentes/{id}` o `DELETE /api/v1/productos/{id}`, que desactivan y no borran). Los documentos ya emitidos no se ven afectados: guardan su propia copia de los datos *(RN-10)*.
+
 ---
 
 ## 5. Qué no se guarda nunca (RNF-01)
 
-Ningún secreto vive en el repositorio. Concretamente:
+Ningún secreto **real** vive en el repositorio. Concretamente:
 
 - **El certificado de firma** entra por configuración en base 64. El repositorio no contiene ningún `.p12` ni `.pfx`, y las pruebas generan certificados autofirmados en memoria.
 - **Las llaves de API** se guardan como huella criptográfica, nunca en claro. Una llave se muestra una sola vez, al crearse *(INV-INT-01)*.
 - **La clave técnica** de un rango entra y no vuelve a salir: no aparece en ninguna respuesta de consulta.
 - **`.env`** está en `.gitignore`. `.env.example` lleva los nombres, nunca los valores.
+- **La cadena de conexión** de las herramientas de EF sale de la configuración: no hay un valor de respaldo con la contraseña escrita en el código.
+
+### Credenciales de desarrollo publicadas a propósito
+
+Hay **una**, y no es un secreto: la llave de API del integrador de desarrollo, `fev_desarrollo_no_usar_en_produccion`. Está escrita en `SemillaDesarrollo` y publicada en el README a propósito, para que cualquiera pueda seguir el recorrido sin aprovisionar nada. Se puede cambiar con `LLAVE_DESARROLLO`.
+
+Solo se siembra en el entorno `Development`, por lista blanca de entornos *(igual que los endpoints de desarrollo)*. Una prueba comprueba que en `Production` no autentica, y otra que en `Development` sí.
+
+> **Desplegar con `ASPNETCORE_ENVIRONMENT=Development` sembraría esa llave**, y con ella cualquiera que haya leído el README tendría acceso a la API. También activaría los endpoints de desarrollo, que permiten forzar el estado de un documento y generar o firmar a mano. Un despliegue real nunca usa `Development`. `docker-compose.yml` lo usa porque es el entorno del recorrido, no un despliegue.
 
 ---
 
@@ -151,6 +182,7 @@ Esta sección existe porque un despliegue de verdad no es este comando con otra 
 - **El protocolo real es SOAP.** `IProveedorValidacion` existe para que cambiar del simulador al servicio real sea escribir otra implementación, pero esa implementación no está escrita.
 - **Los códigos de municipio y unidad de medida no se validan contra las listas oficiales.** Se comprueba que vengan, no que existan. Un código inventado pasaría por aquí y lo rechazaría la DIAN.
 - **`FALLIDO` exige intervención humana y no hay herramienta para ella.** Hay que mirar la base de datos.
+- **No hay forma de dar de alta un integrador fuera de `Development`.** La API exige una llave para todo, y la única que se crea es la del integrador de desarrollo, que solo se siembra en `Development`. En cualquier otro entorno el sistema arranca y nadie puede usarlo. El dominio ya sabe crear un integrador con una llave aleatoria y desactivarlo (`Integrador.Crear`, `Integrador.Desactivar`, con sus pruebas), pero no hay ni endpoint ni comando que lo invoque. Hasta que lo haya, el alta se haría insertando la fila a mano con la huella SHA-256 de la llave, nunca la llave *(ADR-0008)*.
 - **Sin límite de peticiones por integrador, sin métricas, sin alertas.** Relevante en un despliegue real, no en un ejercicio.
 - **Un solo emisor.** El modelo no lo impide, pero no está implementado ni probado.
 
@@ -162,7 +194,7 @@ Esta sección existe porque un despliegue de verdad no es este comando con otra 
 |---|---|
 | `CERTIFICADO_NO_CONFIGURADO` al firmar | Faltan `Firma__CertificadoBase64` o `Firma__Clave`. |
 | Los documentos se quedan en `RECIBIDO` | El trabajador está apagado (`Salida__Habilitado`) o el simulador no responde. |
-| Los documentos acaban en `FALLIDO` | El servicio de validación no contesta. Con el simulador, comprueba su modo en `GET /salud`. |
+| Los documentos acaban en `FALLIDO` | Mira el detalle de la última transición en `GET /api/v1/documentos/{id}/historial`. `RESULTADO DESCONOCIDO` o `RADICADO SIN VEREDICTO`: el servicio de validación no contesta (con el simulador, comprueba su modo en `GET /salud`). `NO SALIO DE AQUI`: falló algo propio antes de enviar, como el certificado o el rango; los registros dicen qué. |
 | `RANGO_NO_DISPONIBLE` al emitir | No hay rango vigente para ese tipo y esa fecha *(RN-02)*. |
 | La API no arranca y habla de la conexión | PostgreSQL todavía no está listo, o la cadena de conexión apunta a otro sitio. |
 

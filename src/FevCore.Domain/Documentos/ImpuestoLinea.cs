@@ -30,10 +30,11 @@ public sealed record ImpuestoLinea
     /// <summary>
     /// Calcula el impuesto sobre una base.
     ///
-    /// NO redondea. El redondeo se aplica una sola vez, sobre el total del
-    /// documento (RN-06, INV-IMP-02). Redondear aqui produciria diferencias
-    /// de centavos entre la suma de las lineas y el total declarado, que es
-    /// una causa documentada de rechazo.
+    /// NO redondea. El redondeo se aplica una sola vez por grupo de tipo y
+    /// tarifa, sobre todo el documento (RN-06, INV-IMP-02, ADR-0016; ver
+    /// SubtotalImpuesto). Redondear aqui, linea por linea, acumularia
+    /// diferencias de centavos entre la suma de las lineas y el total
+    /// declarado, que es una causa documentada de rechazo.
     /// </summary>
     public static ImpuestoLinea Calcular(
         TipoImpuesto tipo,

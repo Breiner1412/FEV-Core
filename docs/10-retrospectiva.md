@@ -12,12 +12,12 @@ Este documento existe porque un plan que se cumple a la perfección no se lo cre
 |---|---|
 | Hitos | 9 planeados (H0 a H8), 9 entregados |
 | Del primer commit al último | 24 al 30 de septiembre de 2026 |
-| Código de producción | 15.800 líneas en 106 archivos |
-| Código de pruebas | 7.100 líneas en 38 archivos |
-| Pruebas automatizadas | 361, todas en verde |
-| Decisiones registradas (ADR) | 14 |
-| Migraciones de base de datos | 8 |
-| Requerimientos | 50, de los cuales 3 sin verificación automática |
+| Código de producción | 15.800 líneas en 106 archivos *(al cierre de H8)* |
+| Código de pruebas | 7.100 líneas en 38 archivos *(al cierre de H8)* |
+| Pruebas automatizadas | 361 al cierre de H8; 402 tras la auditoría final, todas en verde |
+| Decisiones registradas (ADR) | 17 (14 en H8; la auditoría añadió ADR-0015, que sustituye a ADR-0014, ADR-0016 y ADR-0017) |
+| Migraciones de base de datos | 9 (la novena, de la auditoría final) |
+| Requerimientos | 50: 3 sin verificación automática y 2 implementados solo en parte (RF-11, RF-24) |
 
 El dato que más dice de los de arriba es la proporción entre código y pruebas: por cada dos líneas de producción hay casi una de prueba. No era una meta; salió de una decisión tomada en H0 y sostenida después, que es que ningún mecanismo de concurrencia entra sin una prueba que lo demuestre roto al quitarlo.
 
@@ -125,10 +125,64 @@ Declararlo no le quita valor al ejercicio. Lo que se lo quitaría es dejar que a
 
 ## 6. Lo que queda escrito para la próxima vez
 
-Cinco frases que salieron de errores concretos y que valen fuera de este proyecto:
+Frases que salieron de errores concretos y que valen fuera de este proyecto:
 
 1. **Cuando quitas la causa sospechada y el error no cambia, la sospecha era falsa.** No sigas con ella.
 2. **Una prueba que no puede fallar no está probando.** Rompe el mecanismo y comprueba que se pone roja.
 3. **Un requerimiento cubierto de rebote no está cubierto.** Usarlo como preparación de otra prueba no es probarlo.
 4. **El fallo silencioso es peor que el ruidoso.** Un error que nadie ve no deja de ocurrir.
 5. **Antes de teorizar, pregúntale al sistema.** El registro de eventos, el log, la excepción completa. Suele saberlo.
+6. **Un ejemplo documentado que nadie ejecuta es una prueba que nadie corre.** *(Añadida en la auditoría final.)*
+7. **El documento que certifica la cobertura también necesita que alguien lo verifique.** *(Añadida en la auditoría final.)*
+
+
+---
+
+## 7. La auditoría final
+
+Con el proyecto declarado completo se hizo una auditoría por pasadas: primero los hallazgos, después los arreglos, cada uno con una prueba escrita antes y en rojo. Lo que encontró corrige alguna afirmación de este mismo documento, y por eso va aquí y no en otro sitio.
+
+### 7.1 Datos falsos que no avisaban
+
+Los dos peores hallazgos tenían la misma forma: el sistema producía un dato falso, todo seguía en verde y nada fallaba.
+
+- **El CUFE con la clave de otro rango.** El rango se buscaba por prefijo y tipo, que no es único: la autorización de este año y la del anterior pueden compartirlos. La prueba lo reprodujo de punta a punta: la factura se generó, se firmó, se transmitió y quedó **aprobada** con un código único calculado con la clave del rango vencido.
+- **La fecha en UTC.** Una factura de las 19:30 del 31 de diciembre se numeraba con el rango del año siguiente mientras su XML decía 31 de diciembre. El listado ya sabía que había que usar la hora colombiana, y lo explicaba en un comentario; los otros cuatro sitios no lo hacían.
+
+Detrás de ellos hubo más del mismo tipo: documentos que se quedaban sin estado final para siempre, un historial que decía "no consta que llegara" de documentos que la autoridad sí había recibido, y un XML cuyo impuesto total no era la suma de sus propios subtotales.
+
+### 7.2 Nadie siguió nunca su propia documentación
+
+**El ejemplo del propio contrato respondía 500.** `openapi.yaml` enseña a mandar la fecha como `"2026-09-24T14:30:00-05:00"`, que es como la mandaría cualquier integrador colombiano, y PostgreSQL rechaza en esas columnas cualquier desfase distinto de cero. Ninguna prueba enviaba nunca `fechaEmision`.
+
+No fue un caso aislado. El recorrido del README tenía dos pasos 7 y, después de que el trabajador en segundo plano ya hubiera generado y firmado el documento, pedía generarlo y firmarlo a mano; seguido al pie de la letra, respondía `409`. Se escribió en H5 y H6 y nadie lo volvió a ejecutar después de H7.
+
+La sección 3.1 dice que escribir el contrato antes que el código salió mejor de lo esperado, y es verdad para la **superficie**: rutas y métodos coinciden, y hay una prueba que lo vigila. Pero esa prueba compara qué operaciones existen, no si los ejemplos funcionan. **Un ejemplo documentado que nadie ejecuta es una prueba que nadie corre**, y se pudre igual que un comentario (sección 2.4), solo que desde un sitio con más autoridad: es lo primero que copia quien integra.
+
+### 7.3 Pruebas que no podían fallar, otra vez
+
+La sección 2.3 contaba tres. La auditoría encontró más:
+
+- `EstaAbandonada` tenía cuatro pruebas y la producción nunca la llamaba: el criterio real de abandono era una consulta SQL. Con la consulta rota, las cuatro seguían en verde. Se eliminó.
+- La lista blanca de los endpoints de desarrollo solo se había probado por un lado: que existen bajo `Testing`. Que no existan en producción no lo comprobaba nadie, y dos de ellos sí existían.
+- La primera versión de la prueba del redondeo por grupo **pasó la mutación** que debía detectar: con un solo grupo por impuesto, los dos cálculos daban lo mismo. Hizo falta un segundo grupo de IVA para que la comparación pudiera fallar. Sin la mutación, habría quedado una prueba verde que no vigilaba nada.
+- `09-trazabilidad.md` daba RNF-10 por verificado con una prueba que miraba otra cosa. Ese documento lo cuenta ahora en su propia sección.
+
+### 7.4 Un arreglo que rompió otra cosa
+
+El arreglo de A1 sacó la carga del documento fuera de un `try` para que el `catch` pudiera usarlo. Eso abrió un camino por el que un documento ilegible hacía girar su tarea para siempre. Las pruebas en verde no lo detectaron. Lo detectó una pregunta: *¿y si el fallo es permanente?*
+
+Escribir la prueba antes de opinar encontró dos caminos, el introducido y otro que existía desde H7. Comprobar cuál era cuál —corriendo la prueba contra el código anterior— impidió atribuirle al arreglo más culpa de la que tenía, o menos.
+
+### 7.5 Deuda que queda registrada
+
+Una línea por deuda, como la sección 4 dice que debió hacerse desde H0:
+
+- **`Documento.Transicionar` es público.** Permite llegar a `RECHAZADO` sin errores o a `TRANSMITIDO` sin transmisión. La producción no lo usa (el procesador mueve los documentos con los métodos que además registran lo que pasó), pero lo usan el endpoint de desarrollo y las pruebas de dominio. Cerrarlo obliga a reescribir esas pruebas para que recorran los caminos reales; al cierre no compensa.
+- **Cada repositorio tiene su `GuardarCambiosAsync`, y todos guardan el contexto entero.** La emisión guarda la tarea y el contador del rango "a través" del repositorio de documentos, y un comentario lo tiene que aclarar. La operación pertenece a `IUnidadDeTrabajo`.
+- **El documento no guarda el rango que lo numeró.** La clave técnica se busca deduciendo el rango por prefijo, tipo y número. Es correcto porque INV-RAN-03 impide que dos rangos compartan números, pero guardar `RangoId` sería explícito. Exige migración y tocar el agregado.
+- **El alta de integradores no existe fuera de `Development`.** Declarado en `08-despliegue.md`, sección 6.
+- **RF-11 y RF-24 están implementados solo en parte.** Declarado en `09-trazabilidad.md`.
+- **`cac:BillingReference` de las notas lleva el identificador interno de la factura**, no su número ni su CUFE. Declarado en `07-cobertura-ubl.md`.
+
+Lo que la auditoría encontró y decidió no arreglar, con el motivo de cada cosa, está en el cuerpo del pull request de la auditoría. Aquí queda solo lo que es deuda.

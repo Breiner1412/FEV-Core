@@ -226,56 +226,43 @@ public sealed class GeneradorXmlUbl(AmbienteDian ambiente) : IGeneradorXml
 
     // ── Impuestos y totales ──
 
+    /// <summary>
+    /// En UBL el TaxAmount de un TaxTotal ES la suma de sus TaxSubtotal: no
+    /// es una politica de redondeo, es lo que significa el elemento. Los
+    /// grupos salen del dominio ya redondeados, y el total de Totales es su
+    /// suma (ADR-0016).
+    /// </summary>
     private static XElement ImpuestosTotales(Documento documento)
     {
         var moneda = documento.Moneda;
 
-        var porTarifa = documento.Lineas
-            .SelectMany(l => l.Impuestos)
-            .GroupBy(i => new { i.Tipo, i.Tarifa })
-            .OrderBy(g => g.Key.Tipo)
-            .ThenBy(g => g.Key.Tarifa)
-            .ToList();
-
         var total = new XElement(Cac + "TaxTotal",
             Importe(Cbc + "TaxAmount", documento.Totales.TotalImpuestos, moneda));
 
-        foreach (var grupo in porTarifa)
+        foreach (var grupo in documento.ImpuestosPorGrupo())
         {
-            var baseGravable = grupo
-                .Aggregate(Dinero.Cero, (suma, i) => suma + i.BaseGravable)
-                .Redondear();
-
-            var valor = grupo
-                .Aggregate(Dinero.Cero, (suma, i) => suma + i.Valor)
-                .Redondear();
-
-            total.Add(new XElement(Cac + "TaxSubtotal",
-                Importe(Cbc + "TaxableAmount", baseGravable, moneda),
-                Importe(Cbc + "TaxAmount", valor, moneda),
-                new XElement(Cbc + "Percent", Decimal(grupo.Key.Tarifa)),
-                new XElement(Cac + "TaxCategory",
-                    new XElement(Cbc + "Percent", Decimal(grupo.Key.Tarifa)),
-                    new XElement(Cac + "TaxScheme",
-                        new XElement(Cbc + "ID", CodigoImpuesto(grupo.Key.Tipo)),
-                        new XElement(Cbc + "Name", NombreImpuesto(grupo.Key.Tipo))))));
+            total.Add(Subtotal(
+                grupo.Tipo, grupo.Tarifa, grupo.BaseGravable, grupo.Valor, moneda));
         }
 
         return total;
     }
 
-    private static string CodigoImpuesto(TipoImpuesto tipo) => tipo switch
-    {
-        TipoImpuesto.Iva or TipoImpuesto.IvaExento or TipoImpuesto.IvaExcluido => "01",
-        TipoImpuesto.Inc => "04",
-        _ => "01"
-    };
-
-    private static string NombreImpuesto(TipoImpuesto tipo) => tipo switch
-    {
-        TipoImpuesto.Inc => "INC",
-        _ => "IVA"
-    };
+    private static XElement Subtotal(
+        TipoImpuesto tipo,
+        decimal tarifa,
+        Dinero baseGravable,
+        Dinero valor,
+        string moneda) =>
+        new(Cac + "TaxSubtotal",
+            Importe(Cbc + "TaxableAmount", baseGravable, moneda),
+            Importe(Cbc + "TaxAmount", valor, moneda),
+            new XElement(Cbc + "Percent", Decimal(tarifa)),
+            new XElement(Cac + "TaxCategory",
+                new XElement(Cbc + "Percent", Decimal(tarifa)),
+                new XElement(Cac + "TaxScheme",
+                    new XElement(Cbc + "ID", tipo.CodigoDian()),
+                    new XElement(Cbc + "Name", tipo.NombreDian()))));
 
     /// <summary>
     /// El nombre del elemento de totales cambia con el documento: en una
@@ -317,25 +304,27 @@ public sealed class GeneradorXmlUbl(AmbienteDian ambiente) : IGeneradorXml
 
         if (linea.Impuestos.Count > 0)
         {
+            // La misma regla que en el documento: el TaxAmount de la linea es
+            // la suma de sus subtotales tal como se escriben, no el redondeo
+            // de su suma exacta, que podria diferir en un centavo.
+            var subtotales = linea.Impuestos
+                .Select(i => (Impuesto: i, Valor: i.Valor.Redondear()))
+                .ToList();
+
             var impuestos = new XElement(Cac + "TaxTotal",
                 Importe(
                     Cbc + "TaxAmount",
-                    linea.Impuestos
-                        .Aggregate(Dinero.Cero, (suma, i) => suma + i.Valor)
-                        .Redondear(),
+                    subtotales.Aggregate(Dinero.Cero, (suma, s) => suma + s.Valor),
                     moneda));
 
-            foreach (var impuesto in linea.Impuestos)
+            foreach (var (impuesto, valor) in subtotales)
             {
-                impuestos.Add(new XElement(Cac + "TaxSubtotal",
-                    Importe(Cbc + "TaxableAmount", impuesto.BaseGravable.Redondear(), moneda),
-                    Importe(Cbc + "TaxAmount", impuesto.Valor.Redondear(), moneda),
-                    new XElement(Cbc + "Percent", Decimal(impuesto.Tarifa)),
-                    new XElement(Cac + "TaxCategory",
-                        new XElement(Cbc + "Percent", Decimal(impuesto.Tarifa)),
-                        new XElement(Cac + "TaxScheme",
-                            new XElement(Cbc + "ID", CodigoImpuesto(impuesto.Tipo)),
-                            new XElement(Cbc + "Name", NombreImpuesto(impuesto.Tipo))))));
+                impuestos.Add(Subtotal(
+                    impuesto.Tipo,
+                    impuesto.Tarifa,
+                    impuesto.BaseGravable.Redondear(),
+                    valor,
+                    moneda));
             }
 
             elemento.Add(impuestos);

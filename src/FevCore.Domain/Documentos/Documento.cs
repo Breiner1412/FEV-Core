@@ -115,6 +115,14 @@ public sealed class Documento
     /// </summary>
     public IReadOnlyList<TransicionEstado> Transiciones => _transiciones;
 
+    /// <summary>
+    /// Los impuestos del documento por grupo de tipo y tarifa, cada uno
+    /// redondeado una vez (RN-06, ADR-0016). Metodo y no propiedad: se
+    /// calcula de las lineas, no se guarda.
+    /// </summary>
+    public IReadOnlyList<SubtotalImpuesto> ImpuestosPorGrupo() =>
+        SubtotalImpuesto.Agrupar(_lineas);
+
     /// <summary>Cada intento de entrega al servicio de validacion (RF-18).</summary>
     public IReadOnlyList<Transmision> Transmisiones => _transmisiones;
 
@@ -270,6 +278,12 @@ public sealed class Documento
     /// averiguar por si mismo: cuanto suman las otras notas credito de esa
     /// factura. La aplicacion la calcula y la entrega; la regla de que no se
     /// exceda el total sigue viviendo aqui (RN-04).
+    ///
+    /// Las dos partes se tratan distinto a proposito (ADR-0017). El
+    /// adquirente es parte de la operacion que se corrige: identidad y datos
+    /// salen de la factura, aqui, y por eso no se reciben. El emisor es quien
+    /// expide el documento nuevo, hoy: sus datos actuales los entrega quien
+    /// llama.
     /// </summary>
     public static Documento EmitirNota(
         TipoDocumento tipo,
@@ -282,7 +296,6 @@ public sealed class Documento
         MotivoNota motivo,
         string? observaciones,
         DatosTributarios emisorSnapshot,
-        DatosTributarios adquirenteSnapshot,
         IEnumerable<Linea> lineas,
         Dinero notasCreditoPrevias)
     {
@@ -346,12 +359,15 @@ public sealed class Documento
             fechaEmision: fechaEmision,
 
             // La nota hereda la moneda y el adquirente de la factura: no se
-            // corrige una factura en otra moneda ni a nombre de otro.
+            // corrige una factura en otra moneda ni a nombre de otro. Del
+            // adquirente hereda la identidad Y los datos, los dos del mismo
+            // sitio. Antes la identidad salia de la factura y los datos del
+            // catalogo actual (ADR-0017).
             moneda: facturaReferenciada.Moneda,
             adquirenteId: facturaReferenciada.AdquirenteId,
+            adquirenteSnapshot: facturaReferenciada.AdquirenteSnapshot.Copiar(),
 
             emisorSnapshot: emisorSnapshot,
-            adquirenteSnapshot: adquirenteSnapshot,
             documentoReferenciadoId: facturaReferenciada.Id,
             motivo: motivo,
             observaciones: string.IsNullOrWhiteSpace(observaciones)
@@ -407,16 +423,34 @@ public sealed class Documento
     }
 
     /// <summary>
-    /// Guarda el XML generado y su codigo unico, y avanza a EnProceso.
+    /// Empieza el procesamiento: el documento pasa a EnProceso ANTES de
+    /// generar su XML.
     ///
-    /// Los tres efectos van juntos a proposito: un documento con XML pero en
-    /// estado Recibido, o en EnProceso sin XML, serian estados que no
-    /// significan nada.
+    /// Es lo que la seccion 6.1 dice que significa EN_PROCESO: "se esta
+    /// generando o firmando el XML". Y es lo unico que da salida a un fallo
+    /// al generar, porque la seccion 6.2 solo lleva a FALLIDO desde
+    /// EN_PROCESO. Ver la nota de RegistrarXmlGenerado.
     /// </summary>
-    public void RegistrarXmlGenerado(
-        string xml,
-        string codigoUnico,
-        DateTimeOffset momento)
+    public void IniciarProceso(DateTimeOffset momento) =>
+        Transicionar(EstadoDocumento.EnProceso, "Inicia la generacion del XML.", momento);
+
+    /// <summary>
+    /// Guarda el XML generado y su codigo unico.
+    ///
+    /// Hasta la auditoria final este metodo tambien avanzaba el documento a
+    /// EnProceso, los tres efectos juntos. La razon era evitar un documento
+    /// en EnProceso sin XML, que parecia un estado sin significado. El
+    /// razonamiento estaba equivocado por dos lados: la seccion 6.1 define
+    /// EN_PROCESO precisamente como "se esta generando", o sea, todavia sin
+    /// XML; y al transicionar solo despues de generar con exito, un fallo al
+    /// generar dejaba el documento en RECIBIDO, desde donde la maquina de
+    /// estados no permite FALLIDO. Evitaba un estado que si significa algo a
+    /// cambio de dejar documentos sin salida.
+    ///
+    /// Ahora la transicion la hace IniciarProceso, antes de generar, y aqui
+    /// solo se exige que ya haya ocurrido.
+    /// </summary>
+    public void RegistrarXmlGenerado(string xml, string codigoUnico)
     {
         if (string.IsNullOrWhiteSpace(xml))
         {
@@ -443,11 +477,13 @@ public sealed class Documento
                 "Un documento se representa de una sola forma.");
         }
 
-        // La transicion va PRIMERO. Verifica que el documento este donde
-        // corresponde, y si no lo esta, lanza antes de haber tocado nada. Al
-        // reves, un documento en estado invalido se quedaria con el XML
-        // asignado en memoria aunque la operacion hubiera fallado.
-        Transicionar(EstadoDocumento.EnProceso, "XML generado.", momento);
+        if (Estado != EstadoDocumento.EnProceso)
+        {
+            throw new ExcepcionDominio(
+                "ESTADO_NO_PERMITE_GENERAR",
+                $"El documento {NumeroCompleto} esta en {Estado}. El XML se " +
+                "registra con el documento en EnProceso: primero IniciarProceso.");
+        }
 
         Xml = xml;
         CodigoUnico = codigoUnico;
@@ -572,22 +608,54 @@ public sealed class Documento
     }
 
     /// <summary>
-    /// El sistema no logro completar el proceso (RN-13).
+    /// El sistema no logro llevar el documento a un desenlace (RN-13).
     ///
-    /// FALLIDO no significa que el documento no llegara: significa que NO SE
-    /// SABE. Si hubo una transmision sin respuesta, la autoridad pudo
-    /// haberlo recibido. Por eso exige revision manual antes de emitir un
-    /// reemplazo, y por eso las transmisiones se conservan todas.
+    /// FALLIDO significa eso y que hace falta una persona. No dice por si
+    /// solo que paso: lo dice el detalle de esta transicion, que distingue
+    /// los casos segun lo que consta en las transmisiones (ADR-0015). Solo
+    /// uno obliga a verificar ante la DIAN antes de emitir un reemplazo.
+    ///
+    /// Antes habia dos textos, "resultado desconocido" y "no consta que
+    /// llegara", y el segundo se escribia tambien cuando la autoridad SI
+    /// habia recibido el documento y devuelto con que consultarlo.
     /// </summary>
     public void RegistrarFallo(string motivo, DateTimeOffset momento) =>
         Transicionar(
             EstadoDocumento.Fallido,
             motivo,
             momento,
-            detalle: HuboEnvioSinRespuesta
-                ? "RESULTADO DESCONOCIDO: hubo al menos un envio sin respuesta. " +
-                  "El documento pudo haber llegado a la autoridad."
-                : "No se completo el proceso. No consta que el documento llegara.");
+            detalle: DesenlaceDelFallo());
+
+    /// <summary>
+    /// Que consta del documento ante la autoridad, del caso mas informativo
+    /// al menos. Una entrega aceptada va primero: si consta que llego, un
+    /// envio anterior sin respuesta ya no deja la duda de si llego.
+    /// </summary>
+    private string DesenlaceDelFallo()
+    {
+        if (IdentificadorSeguimiento is { } seguimiento)
+        {
+            return $"RADICADO SIN VEREDICTO: la autoridad recibio el documento " +
+                   $"(seguimiento {seguimiento}) y no se obtuvo su veredicto. " +
+                   "Consultarlo con ese identificador; no hace falta verificar si llego.";
+        }
+
+        if (HuboEnvioSinRespuesta)
+        {
+            return "RESULTADO DESCONOCIDO: hubo al menos un envio sin respuesta y " +
+                   "el documento pudo haber llegado a la autoridad. Verificar ante " +
+                   "la DIAN antes de emitir un reemplazo.";
+        }
+
+        if (_transmisiones.Any(t => t.Resultado == ResultadoTransmision.ErrorDefinitivo))
+        {
+            return "NO RADICADO: el servicio de validacion rechazo la entrega. " +
+                   "Se puede reemplazar sin verificar ante la DIAN.";
+        }
+
+        return "NO SALIO DE AQUI: ningun envio llego a la autoridad. " +
+               "Se puede reemplazar sin verificar ante la DIAN.";
+    }
 
     /// <summary>
     /// Si algun intento salio sin que volviera respuesta. Es lo que separa

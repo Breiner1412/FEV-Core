@@ -187,47 +187,4 @@ public sealed class TareaSalidaTests
 
         Assert.Equal(esperado, tarea.AgotoIntentos(maximo));
     }
-
-    // ── Recuperacion de tareas abandonadas (RNF-04) ──
-
-    [Fact]
-    public void Una_tarea_libre_nunca_esta_abandonada()
-    {
-        var tarea = Crear();
-
-        Assert.False(tarea.EstaAbandonada(Ahora.AddDays(1), TimeSpan.FromMinutes(2)));
-    }
-
-    [Fact]
-    public void Una_tarea_recien_tomada_no_esta_abandonada()
-    {
-        var tarea = Crear();
-        tarea.Tomar(Ahora);
-
-        // Todavia la esta trabajando alguien. Darla por abandonada aqui
-        // haria que dos trabajadores transmitieran el mismo documento.
-        Assert.False(tarea.EstaAbandonada(Ahora.AddSeconds(30), TimeSpan.FromMinutes(2)));
-    }
-
-    [Fact]
-    public void Una_tarea_tomada_hace_rato_se_considera_abandonada()
-    {
-        var tarea = Crear();
-        tarea.Tomar(Ahora);
-
-        // Es el mecanismo de recuperacion: si el proceso que la tomo murio,
-        // nadie va a soltarla. La marca envejece sola y la tarea vuelve a
-        // estar disponible sin que nadie intervenga.
-        Assert.True(tarea.EstaAbandonada(Ahora.AddMinutes(3), TimeSpan.FromMinutes(2)));
-    }
-
-    [Fact]
-    public void Reprogramar_devuelve_la_tarea_y_deja_de_estar_abandonada()
-    {
-        var tarea = Crear();
-        tarea.Tomar(Ahora);
-        tarea.Reprogramar("fallo", Ahora, SinTecho);
-
-        Assert.False(tarea.EstaAbandonada(Ahora.AddDays(1), TimeSpan.FromMinutes(2)));
-    }
 }

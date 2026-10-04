@@ -21,13 +21,6 @@ namespace FevCore.Domain.Documentos;
 /// </summary>
 public sealed record ValoresCufe
 {
-    /// <summary>
-    /// Colombia esta en UTC-05:00 y no aplica horario de verano, asi que el
-    /// desfase es fijo. Las fechas del documento se escriben en esta zona,
-    /// no en UTC.
-    /// </summary>
-    public static readonly TimeSpan ZonaColombia = TimeSpan.FromHours(-5);
-
     public required string NumeroFactura { get; init; }
     public required string Fecha { get; init; }
     public required string Hora { get; init; }
@@ -56,7 +49,8 @@ public sealed record ValoresCufe
                 "rango de numeracion.");
         }
 
-        var enColombia = documento.FechaEmision.ToOffset(ZonaColombia);
+        // Las fechas del documento se escriben en hora colombiana, no en UTC.
+        var enColombia = HoraColombia.En(documento.FechaEmision);
 
         return new ValoresCufe
         {
@@ -69,8 +63,12 @@ public sealed record ValoresCufe
             // LegalMonetaryTotal/LineExtensionAmount.
             ValorBruto = Importe(documento.Totales.TotalBaseImponible),
 
-            ValorIva = Importe(SumarImpuesto(documento, TipoImpuesto.Iva)),
-            ValorInc = Importe(SumarImpuesto(documento, TipoImpuesto.Inc)),
+            // Por codigo DIAN, no por tipo: ValIva es todo lo que el XML
+            // declara con 01 (IVA, exento y excluido), y sale de los mismos
+            // grupos ya redondeados que el XML y que Totales. Asi ValIva mas
+            // ValInc es exactamente el impuesto total (ADR-0016).
+            ValorIva = Importe(SumarImpuesto(documento, CodigoDianImpuesto.Iva)),
+            ValorInc = Importe(SumarImpuesto(documento, CodigoDianImpuesto.Inc)),
 
             // El ICA es un impuesto municipal que este proyecto no maneja.
             // El campo NO se omite: la formula exige los tres codigos siempre,
@@ -92,12 +90,10 @@ public sealed record ValoresCufe
     /// </summary>
     private static string Importe(Dinero valor) => valor.ParaDocumento();
 
-    private static Dinero SumarImpuesto(Documento documento, TipoImpuesto tipo) =>
-        documento.Lineas
-            .SelectMany(l => l.Impuestos)
-            .Where(i => i.Tipo == tipo)
-            .Aggregate(Dinero.Cero, (suma, i) => suma + i.Valor)
-            .Redondear();
+    private static Dinero SumarImpuesto(Documento documento, string codigoDian) =>
+        documento.ImpuestosPorGrupo()
+            .Where(g => g.Tipo.CodigoDian() == codigoDian)
+            .Aggregate(Dinero.Cero, (suma, g) => suma + g.Valor);
 
     /// <summary>
     /// Los quince valores, uno detras de otro, sin separadores.

@@ -72,6 +72,9 @@ public sealed class GestionRangos(
         CancellationToken cancelacion = default) =>
         repositorio.ObtenerPorIdAsync(id, cancelacion);
 
-    /// <summary>La fecha de hoy segun el reloj de la aplicacion, para RF-10.</summary>
-    public DateOnly Hoy() => DateOnly.FromDateTime(reloj.GetUtcNow().UtcDateTime);
+    /// <summary>
+    /// La fecha de hoy en Colombia, para RF-10. En UTC, despues de las 19:00
+    /// "hoy" ya seria manana y los dias para vencer saldrian con uno menos.
+    /// </summary>
+    public DateOnly Hoy() => HoraColombia.Fecha(reloj.GetUtcNow());
 }

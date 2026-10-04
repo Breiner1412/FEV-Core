@@ -12,9 +12,7 @@ namespace FevCore.Api.Controllers;
 [Route("api/v1/documentos")]
 public sealed class DocumentosController(
     ConsultarDocumentoHandler manejador,
-    ListarDocumentosHandler listado,
-    GenerarXmlHandler generador,
-    FirmarDocumentoHandler firmador) : ControllerBase
+    ListarDocumentosHandler listado) : ControllerBase
 {
     /// <summary>
     /// Lista los documentos del integrador autenticado (RF-24).
@@ -125,48 +123,6 @@ public sealed class DocumentosController(
                 .OrderBy(t => t.Secuencia)
                 .Select(RespuestaTransicion.Desde)
                 .ToList());
-    }
-
-    /// <summary>
-    /// Genera el XML del documento y lo deja guardado (RF-16).
-    ///
-    /// Es POST y no GET porque tiene efectos: guarda el XML, fija el codigo
-    /// unico y mueve el documento a EN_PROCESO. En H7 esto lo disparara el
-    /// proceso en segundo plano y esta ruta dejara de hacer falta.
-    /// </summary>
-    [HttpPost("{id:guid}/xml")]
-    [ProducesResponseType<RespuestaDocumento>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> GenerarXml(Guid id, CancellationToken cancelacion)
-    {
-        var documento = await generador.EjecutarAsync(id, cancelacion);
-
-        return documento is null
-            ? NoEncontrado(id)
-            : Ok(RespuestaDocumento.Desde(documento));
-    }
-
-    /// <summary>
-    /// Firma digitalmente el XML del documento (RF-17).
-    ///
-    /// No cambia el estado: firmar no es una transicion. El documento sigue
-    /// EN_PROCESO, que es el estado que los requerimientos definen como "se
-    /// esta generando o firmando el XML".
-    /// </summary>
-    [HttpPost("{id:guid}/firma")]
-    [ProducesResponseType<RespuestaDocumento>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Firmar(Guid id, CancellationToken cancelacion)
-    {
-        var documento = await firmador.EjecutarAsync(id, cancelacion);
-
-        return documento is null
-            ? NoEncontrado(id)
-            : Ok(RespuestaDocumento.Desde(documento));
     }
 
     /// <summary>

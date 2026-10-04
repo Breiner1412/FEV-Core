@@ -194,7 +194,7 @@ Tres decisiones tomadas antes de redactar este documento condicionan varios requ
 | **RN-03** | Una nota crédito o débito debe referenciar una factura que exista en el sistema y se encuentre aprobada. | Coherencia documental. |
 | **RN-04** | La suma de las notas crédito asociadas a una factura no puede superar el valor total de esa factura. | Coherencia contable. |
 | **RN-05** | Una nota crédito o débito no puede referenciar a otra nota crédito o débito. | Coherencia documental. |
-| **RN-06** | El impuesto se calcula sobre la base gravable de cada línea aplicando la tarifa del producto, pero el redondeo se aplica sobre el total del documento, no línea por línea. | Consistencia con la validación de la autoridad, que compara el total declarado contra la sumatoria. |
+| **RN-06** | El impuesto se calcula sobre la base gravable de cada línea aplicando la tarifa del producto. El redondeo nunca se aplica línea por línea: se aplica una vez por cada grupo de tipo y tarifa sobre todo el documento, y el impuesto total es la suma de los grupos. **Precisada en la auditoría final, ver ADR-0016.** | Consistencia con la validación de la autoridad, que compara el total declarado contra la sumatoria. |
 | **RN-07** | Un documento rechazado por la autoridad no puede corregirse ni retransmitirse. La corrección exige emitir un documento nuevo, con número nuevo. | Ver nota al pie. |
 | **RN-08** | Un documento debe tener al menos una línea de detalle, y toda línea debe tener cantidad y precio mayores que cero. | Coherencia básica. |
 | **RN-09** | El total del documento es la suma de las bases gravables más la suma de los impuestos, menos los descuentos. Este valor debe coincidir exactamente con el declarado en el XML. | Requisito de validación. |
@@ -217,7 +217,7 @@ Todo documento recorre esta máquina de estados. Ninguna transición distinta de
 | `TRANSMITIDO` | Entregado al servicio de validación. Se tiene identificador de seguimiento. A la espera de veredicto. | No |
 | `APROBADO` | Validado por la autoridad. Tiene código único. | Sí |
 | `RECHAZADO` | La autoridad lo rechazó. Tiene lista de errores. | Sí |
-| `FALLIDO` | El sistema no logró completar el proceso tras agotar los reintentos. El fallo es propio o de comunicación, no un rechazo de la autoridad. | Sí |
+| `FALLIDO` | El documento no llegó a un desenlace tras agotar los reintentos y hace falta una persona. El fallo es propio o de comunicación, no un rechazo de la autoridad. El historial dice cuál de los casos fue (RN-13). | Sí |
 
 ### 6.2 Transiciones permitidas
 
@@ -234,7 +234,7 @@ TRANSMITIDO  → FALLIDO        (sin veredicto tras agotar reintentos)
 
 - **RN-11:** un documento en estado terminal no cambia de estado nunca más.
 - **RN-12:** toda transición queda registrada con su marca de tiempo y el motivo que la produjo.
-- **RN-13:** un documento en `FALLIDO` no implica que la autoridad no lo haya recibido. El estado se documenta como "resultado desconocido" y exige revisión manual antes de emitir un reemplazo.
+- **RN-13:** un documento en `FALLIDO` no implica que la autoridad no lo haya recibido. `FALLIDO` significa que no hubo desenlace y hace falta una persona; el historial dice cuál de estos casos fue: no salió de aquí, llegó y está radicado sin veredicto, o no se sabe si llegó. Solo el último exige verificar ante la autoridad antes de emitir un reemplazo. **Precisada en la auditoría final, ver ADR-0015.**
 
 > RN-13 es deliberada. La tentación es tratar `FALLIDO` como "no pasó nada" y reintentar con un documento nuevo, pero si la autoridad alcanzó a recibir el original se produciría una duplicación. Reconocer la incertidumbre en el modelo es preferible a esconderla.
 
@@ -244,7 +244,7 @@ TRANSMITIDO  → FALLIDO        (sin veredicto tras agotar reintentos)
 
 | ID | Requerimiento | Criterio de aceptación | Prioridad |
 |---|---|---|---|
-| **RNF-01** | Los secretos —llaves de API, certificado, credenciales de base de datos— no pueden estar en el código fuente ni en el repositorio. | Una revisión del repositorio no encuentra ningún secreto. La configuración se provee por variables de entorno. | Debe |
+| **RNF-01** | Ningún secreto real —llaves de API, certificado, credenciales de base de datos de un entorno real— puede estar en el código fuente ni en el repositorio. Las credenciales de desarrollo que el proyecto publica a propósito, para que cualquiera pueda seguir el recorrido, se nombran como tales y solo existen fuera de producción. **Precisado en la auditoría final.** | Una revisión del repositorio no encuentra ningún secreto real: nada que dé acceso a un entorno real ni que pueda conectar con él. Cada credencial de desarrollo publicada está identificada como tal, y una prueba comprueba que no existe en producción. La configuración real se provee por variables de entorno. | Debe |
 | **RNF-02** | El acceso al servicio de validación de la autoridad debe estar detrás de una abstracción que permita sustituir la implementación sin modificar la lógica de negocio. | Cambiar del simulador a otra implementación se logra cambiando configuración, sin tocar el código de emisión. Origen: sección 7.1 del documento de visión. | Debe |
 | **RNF-03** | La solicitud de emisión debe responder en menos de 500 ms en el percentil 95, medido sin incluir el tiempo del servicio externo. | Medición bajo carga de prueba. | Debería |
 | **RNF-04** | El procesamiento de documentos debe continuar aunque el servicio de validación esté caído, encolando el trabajo pendiente. | Con el servicio externo apagado, la emisión sigue aceptándose y los documentos quedan en espera, no en error. | Debe |
@@ -295,3 +295,6 @@ Se registran para dejar constancia de que fueron evaluados y descartados por dec
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-09-24 | Versión inicial. 25 requerimientos funcionales, 13 reglas de negocio, 12 requerimientos no funcionales. |
+| 1.1 | 2026-10-02 | RN-06 precisada: decía "el redondeo se aplica sobre el total del documento", que solo coincide con la suma de los subtotales declarados cuando hay un grupo de impuesto. La intención —no redondear línea por línea— no cambia. Ver ADR-0016. |
+| 1.2 | 2026-10-02 | RN-13 precisada: decía que `FALLIDO` se documenta como "resultado desconocido", y la sección 6.2 también lleva a `FALLIDO` cuando no se pudo generar o firmar, que tiene un resultado conocido. Ver ADR-0015. |
+| 1.3 | 2026-10-04 | RNF-01 precisada: decía "ningún secreto" sin distinguir las credenciales de desarrollo que el proyecto publica a propósito, como la llave del recorrido del README. Ahora distingue los secretos reales, que nunca están en el repositorio, de las credenciales de desarrollo publicadas, que se nombran como tales y solo existen fuera de producción. |

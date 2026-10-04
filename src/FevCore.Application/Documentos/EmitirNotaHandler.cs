@@ -2,6 +2,7 @@ using FevCore.Application.Abstracciones;
 using FevCore.Domain.Comun;
 using FevCore.Domain.Documentos;
 using FevCore.Domain.Salida;
+using Microsoft.Extensions.Logging;
 
 namespace FevCore.Application.Documentos;
 
@@ -26,26 +27,29 @@ public sealed record ComandoEmitirNota(
 public sealed class EmitirNotaHandler(
     IRepositorioDocumentos repositorio,
     IRepositorioEmisor repositorioEmisor,
-    IRepositorioAdquirentes repositorioAdquirentes,
     IRepositorioProductos repositorioProductos,
     IRepositorioRangos repositorioRangos,
     IUnidadDeTrabajo unidadDeTrabajo,
     IRepositorioTareas tareas,
-    TimeProvider reloj)
+    TimeProvider reloj,
+    ILogger<EmitirNotaHandler> registrador)
 {
-    public async Task<ResultadoEmision> EjecutarAsync(
+    /// <summary>RF-15: ver EmisionIdempotente.</summary>
+    public Task<ResultadoEmision> EjecutarAsync(
         ComandoEmitirNota comando,
-        CancellationToken cancelacion = default)
+        CancellationToken cancelacion = default) =>
+        EmisionIdempotente.EjecutarAsync(
+            repositorio,
+            registrador,
+            comando.IntegradorId,
+            comando.ReferenciaExterna,
+            () => EmitirNuevaAsync(comando, cancelacion),
+            cancelacion);
+
+    private async Task<Documento> EmitirNuevaAsync(
+        ComandoEmitirNota comando,
+        CancellationToken cancelacion)
     {
-        // ── 1. RF-15: si esta peticion ya llego, devolver lo mismo ──
-        var existente = await repositorio.BuscarPorReferenciaExternaAsync(
-            comando.IntegradorId, comando.ReferenciaExterna, cancelacion);
-
-        if (existente is not null)
-        {
-            return new ResultadoEmision(existente, YaExistia: true);
-        }
-
         var emisor = await repositorioEmisor.ObtenerAsync(cancelacion)
             ?? throw new ExcepcionDominio(
                 "EMISOR_INCOMPLETO",
@@ -58,7 +62,11 @@ public sealed class EmitirNotaHandler(
         var lineas = ConstructorLineas.Construir(comando.Lineas, productos);
         var fechaEmision = comando.FechaEmision ?? reloj.GetUtcNow();
 
-        // ── 2. Dos candados, siempre en este orden ──
+        // La vigencia del rango se evalua con la fecha que el documento
+        // declara, que es la colombiana, no la UTC (RN-02, INV-RAN-04).
+        var fechaCivil = HoraColombia.Fecha(fechaEmision);
+
+        // ── 1. Dos candados, siempre en este orden ──
         //
         // Primero la factura, despues el rango. El orden importa: si un caso
         // de uso tomara el rango antes que la factura y otro al reves, dos
@@ -77,19 +85,6 @@ public sealed class EmitirNotaHandler(
                 $"No existe un documento con el identificador " +
                 $"{comando.DocumentoReferenciadoId}.");
 
-        // El adquirente se resuelve por el de la FACTURA, no por uno que
-        // mande el cliente: una nota corrige una venta concreta, a su mismo
-        // comprador.
-        //
-        // No se comprueba que siga activo: desactivar un adquirente impide
-        // venderle de nuevo, no corregir lo que ya se le vendio.
-        var adquirente = await repositorioAdquirentes.ObtenerPorIdAsync(
-            factura.AdquirenteId, cancelacion)
-            ?? throw new ExcepcionDominio(
-                "ADQUIRENTE_NO_ENCONTRADO",
-                $"La factura {factura.NumeroCompleto} referencia un adquirente " +
-                "que ya no existe en el catalogo.");
-
         // RN-04: cuanto se lleva acreditado de esta factura. Es la unica
         // cifra que el dominio no puede averiguar solo, por eso se calcula
         // aqui y se le entrega.
@@ -99,7 +94,7 @@ public sealed class EmitirNotaHandler(
 
         var rango = await repositorioRangos.TomarVigenteParaActualizarAsync(
             comando.Tipo,
-            DateOnly.FromDateTime(fechaEmision.UtcDateTime),
+            fechaCivil,
             cancelacion)
             ?? throw new ExcepcionDominio(
                 "RANGO_NO_DISPONIBLE",
@@ -107,7 +102,7 @@ public sealed class EmitirNotaHandler(
                 "fecha. Registrelo en POST /api/v1/rangos-numeracion.");
 
         var consecutivo = rango.TomarSiguienteConsecutivo(
-            DateOnly.FromDateTime(fechaEmision.UtcDateTime));
+            fechaCivil);
 
         // Aqui se verifican RN-03, RN-04 y RN-05, dentro del dominio.
         var nota = Documento.EmitirNota(
@@ -120,8 +115,12 @@ public sealed class EmitirNotaHandler(
             facturaReferenciada: factura,
             motivo: comando.Motivo,
             observaciones: comando.Observaciones,
+            // El emisor, con sus datos de hoy: es quien expide la nota. El
+            // adquirente no se pasa: lo hereda de la factura (ADR-0017). Por
+            // eso tampoco se consulta el catalogo, ni importa si el
+            // adquirente sigue activo: desactivarlo impide venderle de nuevo,
+            // no corregir lo que ya se le vendio.
             emisorSnapshot: emisor.Datos.Copiar(),
-            adquirenteSnapshot: adquirente.Datos.Copiar(),
             lineas: lineas,
             notasCreditoPrevias: notasPrevias);
 
@@ -141,6 +140,6 @@ public sealed class EmitirNotaHandler(
 
         await transaccion.ConfirmarAsync(cancelacion);
 
-        return new ResultadoEmision(nota, YaExistia: false);
+        return nota;
     }
 }

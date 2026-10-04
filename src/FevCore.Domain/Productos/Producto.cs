@@ -109,12 +109,6 @@ public sealed class Producto
         ActualizadoEn = momento;
     }
 
-    public void Reactivar(DateTimeOffset momento)
-    {
-        Activo = true;
-        ActualizadoEn = momento;
-    }
-
     private static List<EspecificacionImpuesto> ValidarImpuestos(
         IEnumerable<EspecificacionImpuesto>? impuestos)
     {

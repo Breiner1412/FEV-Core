@@ -71,17 +71,29 @@ public sealed class ProveedorValidacionHttpTests
         Assert.Equal("SEG-001", resultado.IdentificadorSeguimiento);
     }
 
-    [Fact]
-    public async Task Una_respuesta_aceptada_sin_seguimiento_se_trata_como_transitoria()
+    /// <summary>
+    /// ADR-0015, que sustituye a ADR-0014 en este punto. Un 2xx dice que el
+    /// documento LLEGO; sin un identificador de seguimiento utilizable no hay
+    /// forma de consultar que paso despues. Eso no es "no llego", que es lo
+    /// que significa ErrorTransitorio: es "no se sabe", SinRespuesta.
+    ///
+    /// Utilizable incluye que quepa donde se guarda: uno mas largo que su
+    /// columna hacia fallar el guardado en cada intento.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Accepted, "{}")]
+    [InlineData(HttpStatusCode.OK, "{}")]
+    [InlineData(HttpStatusCode.Accepted, """{"identificadorSeguimiento":"   "}""")]
+    [InlineData(HttpStatusCode.Accepted, """{"identificadorSeguimiento":"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"}""")]
+    public async Task Una_respuesta_aceptada_sin_seguimiento_utilizable_deja_el_resultado_desconocido(
+        HttpStatusCode codigo, string cuerpo)
     {
-        var proveedor = ConRespuesta(HttpStatusCode.Accepted, "{}");
+        var proveedor = ConRespuesta(codigo, cuerpo);
 
         var resultado = await proveedor.TransmitirAsync("SETP990000001", "<xml/>");
 
-        // Aceptar sin devolver con que consultar despues deja al documento
-        // sin forma de averiguar su veredicto. Darlo por bueno seria
-        // perderlo: mejor reintentar.
-        Assert.Equal(ResultadoTransmision.ErrorTransitorio, resultado.Resultado);
+        Assert.Equal(ResultadoTransmision.SinRespuesta, resultado.Resultado);
+        Assert.Null(resultado.IdentificadorSeguimiento);
     }
 
     [Theory]
@@ -177,15 +189,23 @@ public sealed class ProveedorValidacionHttpTests
         Assert.Contains("FAD06: NIT invalido", resultado.Errores);
     }
 
-    [Fact]
-    public async Task Un_rechazo_sin_detalle_no_deja_la_lista_vacia()
+    /// <summary>
+    /// RF-21: el dominio no acepta un rechazo sin errores, asi que el
+    /// adaptador nunca debe entregarle uno. Da igual que la autoridad omita
+    /// el campo, lo mande vacio o lo mande con textos en blanco.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"veredicto":"RECHAZADO"}""")]
+    [InlineData("""{"veredicto":"RECHAZADO","errores":[]}""")]
+    [InlineData("""{"veredicto":"RECHAZADO","errores":["  "]}""")]
+    public async Task Un_rechazo_sin_detalle_no_deja_la_lista_vacia(string cuerpo)
     {
-        var proveedor = ConRespuesta(HttpStatusCode.OK, """{"veredicto":"RECHAZADO"}""");
+        var proveedor = ConRespuesta(HttpStatusCode.OK, cuerpo);
 
         var resultado = await proveedor.ConsultarAsync("SEG-001");
 
         Assert.Equal(VeredictoAutoridad.Rechazado, resultado.Veredicto);
-        Assert.NotEmpty(resultado.Errores);
+        Assert.Contains(resultado.Errores, e => !string.IsNullOrWhiteSpace(e));
     }
 
     [Fact]

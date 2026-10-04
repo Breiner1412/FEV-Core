@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: completo.** Los 9 hitos entregados, 361 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: completo.** Los 9 hitos entregados y una auditoría final, 402 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
 >
 > Si vas a mirar una sola cosa, que sea la [retrospectiva](docs/10-retrospectiva.md): qué se subestimó, qué salió mejor de lo esperado y qué haría diferente.
 
@@ -170,8 +170,8 @@ curl $API/documentos/$DOC -H "X-Api-Key: $LLAVE"
 ```
 
 El `estado` recorre `RECIBIDO` → `EN_PROCESO` → `TRANSMITIDO` → `APROBADO`, y
-aparece un `identificadorSeguimiento`. El campo `historial` guarda cada paso con
-su motivo, así que se puede reconstruir qué pasó y cuándo.
+aparece un `identificadorSeguimiento`. El historial (paso 8) guarda cada paso
+con su motivo, así que se puede reconstruir qué pasó y cuándo.
 
 **Prueba a romperlo.** El simulador obedece cuatro modos, y son la razón de que
 exista:
@@ -190,7 +190,9 @@ motivos. Con `CAIDO`, el trabajador reintenta esperando cada vez más, y vuelve 
 avanzar en cuanto el simulador se recupera. Con `SIN_RESPUESTA` —el que importa—
 el documento acaba en `FALLIDO`, que **no** significa rechazado: significa que
 nadie sabe si la DIAN lo recibió, y que hace falta una persona antes de volver a
-emitir. El porqué está en el [ADR-0014](docs/adr/0014-resultado-desconocido.md).
+emitir. Su historial lo dice: `RESULTADO DESCONOCIDO`. No todo `FALLIDO` es así;
+el historial distingue los casos, y solo ese obliga a verificar ante la DIAN. El
+porqué está en el [ADR-0015](docs/adr/0015-desenlace-de-un-documento-fallido.md).
 
 **7. Emite una nota crédito.** Una nota solo corrige una factura **aprobada**
 (RN-03). Si el simulador está en `APRUEBA`, la factura del paso 4 llega sola a
@@ -221,26 +223,26 @@ factura responde `409 DOCUMENTO_REFERENCIADO_INVALIDO` (RN-05).
 > `Testing`, mediante lista blanca. No aparece en `api/openapi.yaml`: el contrato
 > describe lo que un integrador puede usar, y esto no lo es.
 
-**7. Mira el historial** (RF-23):
+**8. Mira el historial** (RF-23):
 
 ```bash
 curl $API/documentos/$DOC/historial -H "X-Api-Key: $LLAVE"
 ```
 
-Devuelve las cuatro transiciones, empezando por el nacimiento del documento, que
-tiene `estadoAnterior` nulo. Cada una dice cuándo ocurrió y por qué.
+Devuelve cada transición, empezando por el nacimiento del documento, que tiene
+`estadoAnterior` nulo. Cada una dice cuándo ocurrió y por qué. En un documento
+`FALLIDO`, el detalle de la última dice qué consta ante la autoridad.
 
-**8. Genera el XML y descárgalo** (RF-16, RF-25):
+**9. Descarga el XML firmado** (RF-16, RF-17, RF-25):
 
 ```bash
-curl -X POST $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE"
 curl $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE" -o factura.xml
 ```
 
-El primero calcula el CUFE, guarda el XML y mueve el documento a `EN_PROCESO`.
-El segundo devuelve el archivo. Repetir el `POST` responde `409`: un documento
-se representa de una sola forma, porque en la etapa 6 esos bytes concretos se
-firman.
+El trabajador del paso 6 ya lo generó, calculó el CUFE y lo firmó antes de
+transmitirlo; aquí solo se descarga. Lo que se descarga es el XML firmado, el
+mismo que recibió la autoridad. El original sin firmar se conserva internamente
+para poder reproducir el cálculo.
 
 El XML valida contra el esquema oficial de UBL 2.1, que viene versionado en
 `schemas/ubl-2.1/`. **Eso significa que su estructura es correcta, no que la
@@ -248,24 +250,17 @@ DIAN lo aceptaría:** el anexo técnico añade centenares de validaciones de
 negocio que ningún esquema expresa. Qué campos se implementaron y cuáles no
 está en [docs/07-cobertura-ubl.md](docs/07-cobertura-ubl.md).
 
-**9. Firma el documento** (RF-17):
-
-```bash
-curl -X POST $API/documentos/$DOC/firma -H "X-Api-Key: $LLAVE"
-curl $API/documentos/$DOC/xml -H "X-Api-Key: $LLAVE" -o factura-firmada.xml
-```
-
-Hace falta un certificado configurado en `.env` (ver `Firma__CertificadoBase64`).
-Sin él responde `409 CERTIFICADO_NO_CONFIGURADO`, y el resto del recorrido
-funciona igual: se puede levantar el proyecto entero sin tener uno.
-
 La firma va en formato **XAdES-EPES**, dentro de `ext:UBLExtensions`, con la
-política de firma que exige la DIAN. El XML descargado a partir de aquí es el
-firmado; el original se conserva internamente para poder reproducir el cálculo.
+política de firma que exige la DIAN. Hace falta un certificado configurado en
+`.env` (ver `Firma__CertificadoBase64`). Sin él el documento no se puede firmar,
+acaba en `FALLIDO` y su historial dice `NO SALIO DE AQUI`; el resto del
+proyecto se levanta igual.
 
-Firmar no cambia el estado: el documento sigue en `EN_PROCESO`, que es
-justamente lo que ese estado significa. Repetir el `POST` responde `409`, porque
-una firma vale para unos bytes concretos.
+> Para generar y firmar a mano, paso a paso, existen `POST /documentos/{id}/xml`
+> y `POST /documentos/{id}/firma`, solo en `Development` y `Testing`, como el
+> endpoint `/desarrollo`. Sirven con el trabajador apagado
+> (`Salida__Habilitado=false`). En producción no existen: lo hace el trabajador,
+> y un integrador no debe competir con él por el mismo documento.
 
 **Lo que esto no garantiza:** que la DIAN aceptaría la firma. La estructura
 sigue el anexo técnico y el documento valida contra el esquema, pero no se ha
@@ -328,7 +323,7 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 | 2 | [Requerimientos](docs/02-requerimientos.md) | 25 funcionales, 13 reglas de negocio, 12 no funcionales |
 | 3 | [Modelo de dominio](docs/03-modelo-dominio.md) | 12 entidades, 6 agregados, 33 invariantes |
 | 4 | [Arquitectura](docs/04-arquitectura.md) | Capas, flujos y estrategia de pruebas |
-| — | [Decisiones (ADR)](docs/adr/) | 14 decisiones con sus alternativas descartadas |
+| — | [Decisiones (ADR)](docs/adr/) | 17 decisiones con sus alternativas descartadas |
 | 5 | [Contrato de la API](docs/05-contrato-api.md) | Endpoints, códigos de error y guía de integración |
 | — | [Especificación OpenAPI](api/openapi.yaml) | El contrato en formato procesable |
 | 6 | [Plan de entregas](docs/06-plan-entregas.md) | Los 9 hitos y su definición de terminado |
@@ -345,7 +340,8 @@ El proyecto se construyó siguiendo un proceso documentado. Cada documento justi
 - **[Firma XAdES-EPES](docs/adr/0012-firma-xades.md)** — cómo se construye XAdES sobre lo que .NET sí trae, y los dos errores de canonicalización que costaron encontrar.
 - **[Generación del XML](docs/adr/0011-generacion-xml.md)** — por qué el UBL se escribe a mano, y qué garantiza (y qué no) validar contra el esquema oficial.
 - **[Orden de bloqueos](docs/adr/0010-orden-de-bloqueos.md)** — cómo se evita un interbloqueo por diseño, y por qué aquí el bloqueo no protege la experiencia sino la verdad del dato.
-- **[Resultado desconocido](docs/adr/0014-resultado-desconocido.md)** — por qué "no sé si llegó" es un desenlace distinto de "falló", y qué pasa si se confunden.
+- **[Resultado desconocido](docs/adr/0014-resultado-desconocido.md)** y **[qué se sabe de un FALLIDO](docs/adr/0015-desenlace-de-un-documento-fallido.md)** — por qué "no sé si llegó" es un desenlace distinto de "falló", y por qué la auditoría final tuvo que corregir el primero.
+- **[Redondeo por grupo de impuesto](docs/adr/0016-redondeo-por-grupo-de-impuesto.md)** — cuando una regla de negocio y el significado de un elemento UBL no podían cumplirse a la vez, y lo que no se ha podido verificar ante la DIAN.
 - **[Toma de tareas](docs/adr/0013-toma-de-tareas.md)** — cómo varios trabajadores se reparten la bandeja sin pisarse y sin retener una conexión mientras esperan a un tercero.
 
 ---

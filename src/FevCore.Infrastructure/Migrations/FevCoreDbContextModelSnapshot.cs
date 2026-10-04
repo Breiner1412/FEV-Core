@@ -269,7 +269,9 @@ namespace FevCore.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Codigo")
-                        .HasDatabaseName("ix_productos_codigo");
+                        .IsUnique()
+                        .HasDatabaseName("ix_productos_codigo")
+                        .HasFilter("\"Activo\"");
 
                     b.ToTable("productos", (string)null);
                 });
@@ -376,7 +378,9 @@ namespace FevCore.Infrastructure.Migrations
                             b1.HasKey("AdquirenteId");
 
                             b1.HasIndex("TipoIdentificacion", "Identificacion")
-                                .HasDatabaseName("ix_adquirentes_identificacion");
+                                .IsUnique()
+                                .HasDatabaseName("ix_adquirentes_identificacion")
+                                .HasFilter("\"Activo\"");
 
                             b1.ToTable("adquirentes");
 

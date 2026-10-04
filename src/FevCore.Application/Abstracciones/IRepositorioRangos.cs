@@ -22,12 +22,18 @@ public interface IRepositorioRangos
         CancellationToken cancelacion = default);
 
     /// <summary>
-    /// El rango de un prefijo y tipo concretos. Se usa al generar el XML,
-    /// que necesita la clave tecnica del rango que numero el documento.
+    /// El rango que entrego ese numero. Se usa al generar el XML, que
+    /// necesita la clave tecnica de ESE rango (RF-20).
+    ///
+    /// Prefijo y tipo no bastan: la autorizacion de este ano y la del
+    /// anterior pueden compartirlos, cada una con su clave. Lo que las
+    /// distingue es el numero, porque dos rangos del mismo prefijo no
+    /// comparten numeros (INV-RAN-03).
     /// </summary>
-    Task<RangoNumeracion?> BuscarPorPrefijoYTipoAsync(
+    Task<RangoNumeracion?> BuscarQueNumeroAsync(
         string prefijo,
         TipoDocumento tipoDocumento,
+        long consecutivo,
         CancellationToken cancelacion = default);
 
     Task<RangoNumeracion?> ObtenerPorIdAsync(

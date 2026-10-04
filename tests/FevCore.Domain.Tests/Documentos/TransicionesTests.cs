@@ -150,4 +150,43 @@ public sealed class TransicionesTests
         desdeTransmitido.Transicionar(EstadoDocumento.Fallido, "Sin veredicto.", Momento);
         Assert.Equal(EstadoDocumento.Fallido, desdeTransmitido.Estado);
     }
+
+    // ── Seccion 6.1: EN_PROCESO es "se esta generando", todavia sin XML ──
+
+    /// <summary>
+    /// Seccion 6.1 y 6.2. El documento pasa a EN_PROCESO antes de tener XML,
+    /// asi que un fallo al generarlo ya tiene salida a FALLIDO.
+    /// </summary>
+    [Fact]
+    public void Iniciar_el_proceso_lleva_a_en_proceso_sin_xml_y_desde_ahi_se_puede_fallar()
+    {
+        var factura = Factura();
+
+        factura.IniciarProceso(Momento);
+
+        Assert.Equal(EstadoDocumento.EnProceso, factura.Estado);
+        Assert.Null(factura.Xml);
+
+        factura.RegistrarFallo("No se pudo generar el XML.", Momento);
+
+        Assert.Equal(EstadoDocumento.Fallido, factura.Estado);
+    }
+
+    [Fact]
+    public void El_xml_solo_se_registra_con_el_documento_en_proceso()
+    {
+        var factura = Factura();
+
+        var error = Assert.Throws<ExcepcionDominio>(() =>
+            factura.RegistrarXmlGenerado("<Invoice/>", "codigo"));
+
+        Assert.Equal("ESTADO_NO_PERMITE_GENERAR", error.Codigo);
+        Assert.Null(factura.Xml);
+
+        factura.IniciarProceso(Momento);
+        factura.RegistrarXmlGenerado("<Invoice/>", "codigo");
+
+        Assert.Equal("<Invoice/>", factura.Xml);
+        Assert.Equal(EstadoDocumento.EnProceso, factura.Estado);
+    }
 }

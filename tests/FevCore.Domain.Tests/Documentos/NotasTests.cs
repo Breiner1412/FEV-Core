@@ -118,7 +118,6 @@ public sealed class NotasTests
             motivo: MotivoNota.Otros,
             observaciones: null,
             emisorSnapshot: DatosEmisor(),
-            adquirenteSnapshot: DatosAdquirente(),
             lineas: [Linea1()],
             notasCreditoPrevias: Dinero.Cero));
 
@@ -196,11 +195,30 @@ public sealed class NotasTests
             motivo: MotivoNota.AjustePrecio,
             observaciones: "Intereses de mora",
             emisorSnapshot: DatosEmisor(),
-            adquirenteSnapshot: DatosAdquirente(),
             lineas: [Linea1(cantidad: 10m)],
             notasCreditoPrevias: Dinero.Cero);
 
         Assert.True(nota.Totales.TotalAPagar > factura.Totales.TotalAPagar);
         Assert.Equal(TipoDocumento.NotaDebito, nota.Tipo);
+    }
+
+    // ── ADR-0017: el adquirente de la nota es el de la factura ──
+
+    /// <summary>
+    /// ADR-0017, RN-10. Identidad y datos del adquirente salen del mismo
+    /// sitio, la factura, y como copia: si fuera la misma instancia, la
+    /// nota y la factura compartirian un objeto, que es el error que la
+    /// retrospectiva 2.4 cuenta de DatosTributarios.
+    /// </summary>
+    [Fact]
+    public void La_nota_hereda_identidad_y_datos_del_adquirente_de_la_factura_como_copia()
+    {
+        var factura = FacturaAprobada();
+
+        var nota = NotaCredito(factura);
+
+        Assert.Equal(factura.AdquirenteId, nota.AdquirenteId);
+        Assert.Equal(factura.AdquirenteSnapshot, nota.AdquirenteSnapshot);
+        Assert.NotSame(factura.AdquirenteSnapshot, nota.AdquirenteSnapshot);
     }
 }

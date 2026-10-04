@@ -6,6 +6,12 @@ namespace FevCore.Infrastructure.Persistencia;
 
 public sealed class ConfiguracionAdquirente : IEntityTypeConfiguration<Adquirente>
 {
+    /// <summary>
+    /// Nombre del indice de INV-ADQ-01. Publico porque el repositorio lo
+    /// reconoce al traducir una violacion de unicidad.
+    /// </summary>
+    public const string IndiceIdentificacion = "ix_adquirentes_identificacion";
+
     public void Configure(EntityTypeBuilder<Adquirente> adquirente)
     {
         adquirente.ToTable("adquirentes");
@@ -28,8 +34,16 @@ public sealed class ConfiguracionAdquirente : IEntityTypeConfiguration<Adquirent
             // El indice se declara sobre la tabla del adquirente aunque las
             // columnas vengan del objeto incrustado: para la base de datos
             // son columnas de la misma fila.
+            //
+            // Unico y PARCIAL, solo sobre los activos. La aplicacion lo
+            // comprueba antes para poder dar un error con sentido, pero esa
+            // comprobacion no resiste dos altas simultaneas: las dos pasan y
+            // se guardan las dos. La base es la que cierra la carrera
+            // (CLAUDE.md: la unicidad se duplica en la base a proposito).
             datos.HasIndex(d => new { d.TipoIdentificacion, d.Identificacion })
-                .HasDatabaseName("ix_adquirentes_identificacion");
+                .IsUnique()
+                .HasFilter("\"Activo\"")
+                .HasDatabaseName(IndiceIdentificacion);
         });
 
         adquirente.Navigation(a => a.Datos).IsRequired();

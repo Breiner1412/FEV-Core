@@ -196,7 +196,7 @@ La entidad central. Representa una factura, una nota crédito o una nota débito
 | `rangoId` | Rango del que se tomó el número. |
 | `fechaEmision` | Fecha y hora de emisión. |
 | `estado` | Estado actual, según la máquina de la sección 6 del documento de requerimientos. |
-| `adquirenteSnapshot` | Copia de los datos del adquirente al momento de emitir. |
+| `adquirenteSnapshot` | Copia de los datos del adquirente al momento de emitir. En una nota, copia de los de la factura que corrige, no del catálogo actual *(ADR-0017)*. |
 | `emisorSnapshot` | Copia de los datos del emisor al momento de emitir. |
 | `lineas` | Las líneas de detalle. |
 | `moneda` | Moneda del documento. |
@@ -281,7 +281,7 @@ No es una entidad independiente sino un conjunto de valores calculados que viven
 
 **Invariantes**
 - `INV-TOT-01`: se calculan siempre a partir de las líneas. Nunca se reciben desde afuera ni se editan.
-- `INV-TOT-02`: el redondeo se aplica en este nivel, sobre el total, no línea por línea. *(RN-06)*
+- `INV-TOT-02`: el redondeo se aplica en este nivel, nunca línea por línea: una vez por grupo de impuesto (tipo y tarifa), y el impuesto total es la suma de los grupos. *(RN-06, ADR-0016)*
 
 > **Por qué importa el nivel del redondeo.** Si cada línea se redondea por separado, la suma de las líneas redondeadas puede diferir en unos pesos del total calculado sobre los valores exactos. La validación de la autoridad compara ambos y rechaza el documento por inconsistencia. Es un error documentado en implementaciones reales, y la causa de rechazos que parecen inexplicables.
 
@@ -427,14 +427,14 @@ Dónde queda garantizada cada regla de la etapa 2.
 | RN-03 — Nota referencia factura aprobada | `INV-DOC-03` |
 | RN-04 — Notas no superan la factura | Verificación al emitir, sobre el agregado `Documento` referenciado |
 | RN-05 — Nota no referencia nota | `INV-DOC-03` + `INV-DOC-04` |
-| RN-06 — Redondeo sobre el total | `INV-IMP-02` + `INV-TOT-02` |
+| RN-06 — Redondeo por grupo, nunca por línea | `INV-IMP-02` + `INV-TOT-02` |
 | RN-07 — Rechazado no se corrige | Máquina de estados: `RECHAZADO` es terminal |
 | RN-08 — Líneas válidas | `INV-DOC-01` + `INV-LIN-01` |
 | RN-09 — Total coherente | `INV-DOC-02` |
 | RN-10 — Aprobado inmutable | `INV-DOC-07` + `INV-LIN-03` |
 | RN-11 — Terminal es terminal | `INV-DOC-08` |
 | RN-12 — Toda transición registrada | `TransicionEstado` + `INV-TRA-01` |
-| RN-13 — Fallido es incertidumbre | `Transmision` + `INV-TRM-02` |
+| RN-13 — Fallido es "sin desenlace"; el historial dice qué consta | `Transmision` + `INV-TRM-02` + `Documento.RegistrarFallo` (ADR-0015) |
 
 Las trece reglas tienen un lugar concreto en el modelo donde se hacen cumplir. Ninguna queda a cargo de "que el programador se acuerde".
 

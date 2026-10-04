@@ -24,12 +24,6 @@ public sealed record DatosTributarios
     public string Regimen { get; }
     public IReadOnlyList<string> Responsabilidades { get; }
 
-    /// <summary>
-    /// Identifica de forma unica a una parte. Es lo que no puede repetirse
-    /// entre adquirentes activos (INV-ADQ-01).
-    /// </summary>
-    public string ClaveIdentidad => $"{TipoIdentificacion}:{Identificacion}";
-
     /// <summary>Requerido por Entity Framework.</summary>
     private DatosTributarios()
     {

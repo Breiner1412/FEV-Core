@@ -2,6 +2,7 @@ using FevCore.Application.Abstracciones;
 using FevCore.Domain.Adquirentes;
 using FevCore.Domain.Emisores;
 using FevCore.Domain.Productos;
+using FevCore.Domain.Comun;
 using Microsoft.EntityFrameworkCore;
 
 namespace FevCore.Infrastructure.Persistencia;
@@ -67,8 +68,21 @@ public sealed class RepositorioAdquirentes(FevCoreDbContext contexto)
         CancellationToken cancelacion = default) =>
         await contexto.Adquirentes.AddAsync(adquirente, cancelacion);
 
+    /// <summary>
+    /// Guarda, y traduce la violacion de INV-ADQ-01 al mismo error que da la
+    /// comprobacion previa. Esa comprobacion no resiste dos altas a la vez;
+    /// el indice si, y quien pierde la carrera recibe el mismo 409 que si
+    /// hubiera llegado despues.
+    /// </summary>
     public Task GuardarCambiosAsync(CancellationToken cancelacion = default) =>
-        contexto.SaveChangesAsync(cancelacion);
+        TraduccionUnicidad.GuardarAsync(
+            contexto,
+            ConfiguracionAdquirente.IndiceIdentificacion,
+            () => new ExcepcionDominio(
+                "IDENTIFICACION_DUPLICADA",
+                "Ya existe un adquirente activo con esa identificacion. " +
+                "Consultelo y use ese, o desactivelo antes de registrar otro."),
+            cancelacion);
 }
 
 public sealed class RepositorioProductos(FevCoreDbContext contexto)
@@ -134,6 +148,17 @@ public sealed class RepositorioProductos(FevCoreDbContext contexto)
         CancellationToken cancelacion = default) =>
         await contexto.Productos.AddAsync(producto, cancelacion);
 
+    /// <summary>
+    /// Guarda, y traduce la violacion del codigo unico al mismo error que da
+    /// la comprobacion previa. Ver RepositorioAdquirentes.GuardarCambiosAsync.
+    /// </summary>
     public Task GuardarCambiosAsync(CancellationToken cancelacion = default) =>
-        contexto.SaveChangesAsync(cancelacion);
+        TraduccionUnicidad.GuardarAsync(
+            contexto,
+            ConfiguracionProducto.IndiceCodigo,
+            () => new ExcepcionDominio(
+                "CODIGO_PRODUCTO_DUPLICADO",
+                "Ya existe un producto activo con ese codigo. Use otro codigo, " +
+                "o desactive el existente antes de reutilizarlo."),
+            cancelacion);
 }

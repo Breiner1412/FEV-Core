@@ -92,6 +92,5 @@ internal static class ConfiguracionDatosTributarios
             .IsRequired();
 
         // Se calcula desde tipo e identificacion. No se guarda.
-        datos.Ignore(d => d.ClaveIdentidad);
     }
 }

@@ -49,6 +49,12 @@ public sealed class TareaSalida
     ///
     /// Tambien es lo que permite recuperar tareas de procesos que murieron:
     /// una marca vieja significa que nadie la esta trabajando ya (RNF-04).
+    ///
+    /// El criterio de "vieja" vive en un solo sitio, la consulta de
+    /// RepositorioTareas.TomarSiguienteAsync, porque es ahi donde se decide.
+    /// Hubo una copia aqui, EstaAbandonada, con cuatro pruebas propias; la
+    /// produccion nunca la llamaba, asi que esas pruebas seguian en verde con
+    /// la consulta rota. Se elimino en la auditoria final.
     /// </summary>
     public DateTimeOffset? TomadaEn { get; private set; }
 
@@ -130,8 +136,7 @@ public sealed class TareaSalida
 
     /// <summary>
     /// Se agotaron los intentos. La tarea deja de reintentarse, y el
-    /// documento pasa a FALLIDO, que significa resultado desconocido y
-    /// exige revision manual (RN-13).
+    /// documento pasa a FALLIDO, que exige revision manual (RN-13).
     /// </summary>
     public void Agotar(string error, DateTimeOffset momento)
     {
@@ -141,13 +146,6 @@ public sealed class TareaSalida
     }
 
     public bool AgotoIntentos(int maximo) => Intentos >= maximo;
-
-    /// <summary>
-    /// Una tarea tomada hace mas tiempo del permitido se considera
-    /// abandonada: el proceso que la tenia murio sin soltarla.
-    /// </summary>
-    public bool EstaAbandonada(DateTimeOffset momento, TimeSpan tiempoMaximo) =>
-        TomadaEn is not null && momento - TomadaEn.Value > tiempoMaximo;
 
     private static string Recortar(string texto) =>
         texto.Length > 1000 ? texto[..1000] : texto;

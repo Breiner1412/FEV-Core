@@ -33,6 +33,12 @@ builder.Services.ConfigureHttpJsonOptions(opciones =>
 
 builder.Services.AddOpenApi();
 
+// Registros estructurados, con sus scopes (RNF-10). La consola por defecto
+// escribe texto y descarta los scopes, que es por donde llegan el traceId de
+// la peticion y el documento que procesa el trabajador: sin esto, los dos se
+// perdian antes de llegar a ninguna parte.
+builder.Logging.AddJsonConsole(opciones => opciones.IncludeScopes = true);
+
 // Formato estandar de error para las respuestas que genera el framework,
 // como la validacion del modelo de entrada (RNF-11).
 builder.Services.AddProblemDetails();
@@ -189,7 +195,9 @@ if (!app.Environment.IsEnvironment("Testing"))
         await contexto.Database.MigrateAsync();
     }
 
-    if (app.Environment.IsDevelopment())
+    // Lista blanca y no IsDevelopment: la misma regla que los endpoints de
+    // desarrollo, escrita igual. Ver SemillaDesarrollo.
+    if (SemillaDesarrollo.EstaPermitidaEn(app.Environment))
     {
         await SemillaDesarrollo.SembrarIntegradorAsync(app);
     }

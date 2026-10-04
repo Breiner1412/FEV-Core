@@ -2,10 +2,8 @@ namespace FevCore.Domain.Documentos;
 
 /// <summary>
 /// Estados por los que pasa un documento. Ver la maquina de estados en la
-/// seccion 6 del documento de requerimientos.
-///
-/// En H1 todo documento nace y se queda en Recibido: el procesamiento en
-/// segundo plano llega en H7.
+/// seccion 6 del documento de requerimientos y su traduccion a codigo en
+/// MaquinaEstados.
 /// </summary>
 public enum EstadoDocumento
 {
@@ -25,8 +23,10 @@ public enum EstadoDocumento
     Rechazado,
 
     /// <summary>
-    /// No se pudo completar el proceso. RESULTADO DESCONOCIDO: no implica
-    /// que la autoridad no lo haya recibido (RN-13). Estado terminal.
+    /// No se llego a un desenlace y hace falta una persona. No implica que la
+    /// autoridad no lo haya recibido: el detalle de la transicion dice que
+    /// consta, y si hay que verificar ante la DIAN (RN-13, ADR-0015).
+    /// Estado terminal.
     /// </summary>
     Fallido
 }

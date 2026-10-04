@@ -54,18 +54,14 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
             // ToUniversalTime no cambia el instante, solo como se escribe.
             // Hace falta porque la columna es timestamptz y Npgsql exige que
             // el parametro lleve desfase cero: pasarle uno en -05:00 lanza.
-            var inicio = new DateTimeOffset(
-                desde.ToDateTime(TimeOnly.MinValue),
-                ValoresCufe.ZonaColombia).ToUniversalTime();
+            var inicio = HoraColombia.InicioDe(desde).ToUniversalTime();
 
             consulta = consulta.Where(d => d.FechaEmision >= inicio);
         }
 
         if (filtro.Hasta is { } hasta)
         {
-            var finExclusivo = new DateTimeOffset(
-                hasta.AddDays(1).ToDateTime(TimeOnly.MinValue),
-                ValoresCufe.ZonaColombia).ToUniversalTime();
+            var finExclusivo = HoraColombia.InicioDe(hasta.AddDays(1)).ToUniversalTime();
 
             consulta = consulta.Where(d => d.FechaEmision < finExclusivo);
         }
@@ -181,6 +177,22 @@ public sealed class RepositorioDocumentos(FevCoreDbContext contexto)
         CancellationToken cancelacion = default) =>
         await contexto.Documentos.AddAsync(documento, cancelacion);
 
-    public Task GuardarCambiosAsync(CancellationToken cancelacion = default) =>
-        contexto.SaveChangesAsync(cancelacion);
+    /// <summary>
+    /// Guarda, y traduce la violacion del indice de RF-15 a
+    /// ExcepcionReferenciaDuplicada: dos solicitudes con la misma referencia
+    /// llegaron a la vez y esta perdio la carrera. Cualquier otra violacion
+    /// sigue siendo un error y se propaga tal cual.
+    /// </summary>
+    public async Task GuardarCambiosAsync(CancellationToken cancelacion = default)
+    {
+        try
+        {
+            await contexto.SaveChangesAsync(cancelacion);
+        }
+        catch (DbUpdateException error) when (TraduccionUnicidad.EsViolacionDe(
+            error, ConfiguracionDocumento.IndiceReferenciaExterna))
+        {
+            throw new ExcepcionReferenciaDuplicada(error);
+        }
+    }
 }

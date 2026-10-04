@@ -7,28 +7,33 @@ namespace FevCore.Infrastructure.Persistencia;
 /// Permite que las herramientas de linea de comandos creen y eliminen
 /// migraciones sin arrancar la aplicacion.
 ///
-/// La cadena de conexion se busca en tres lugares, en este orden:
+/// La cadena de conexion se busca en dos lugares, en este orden:
 ///
 ///   1. La variable de entorno ConnectionStrings__Principal.
 ///   2. El archivo .env de la raiz del repositorio.
-///   3. Un valor de ultimo recurso para desarrollo.
 ///
 /// El paso 2 existe porque las herramientas de EF necesitan conectarse a la
 /// base — por ejemplo para saber que migraciones ya se aplicaron — y sin el
 /// habria que exportar la contrasena a mano antes de cada comando.
 ///
-/// Nunca se fijan credenciales en el codigo (RNF-01): el valor de ultimo
-/// recurso solo sirve si alguien esta corriendo con la configuracion de
-/// ejemplo sin haberla cambiado.
+/// Si no esta en ninguno, falla diciendo que falta y como ponerlo. Hasta la
+/// auditoria final habia un tercer paso, un valor de ultimo recurso con la
+/// contrasena escrita aqui. Que fuera de desarrollo no cambiaba que hubiera
+/// una contrasena en el repositorio, y RNF-01 no tiene matices. Fallar al
+/// generar una migracion por falta de configuracion es correcto; llevar la
+/// contrasena dentro no lo es.
 /// </summary>
 public sealed class FabricaDbContextDisenio : IDesignTimeDbContextFactory<FevCoreDbContext>
 {
+    private const string Variable = "ConnectionStrings__Principal";
+
+    private static readonly string[] ClavesEnv = ["POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD"];
+
     public FevCoreDbContext CreateDbContext(string[] args)
     {
-        var cadena =
-            Environment.GetEnvironmentVariable("ConnectionStrings__Principal")
-            ?? LeerDelArchivoEnv()
-            ?? "Host=localhost;Port=5432;Database=fevcore;Username=fevcore;Password=fevcore";
+        var cadena = ResolverCadena(
+            Environment.GetEnvironmentVariable(Variable),
+            new DirectoryInfo(Directory.GetCurrentDirectory()));
 
         var opciones = new DbContextOptionsBuilder<FevCoreDbContext>()
             .UseNpgsql(cadena)
@@ -38,45 +43,70 @@ public sealed class FabricaDbContextDisenio : IDesignTimeDbContextFactory<FevCor
     }
 
     /// <summary>
-    /// Busca un archivo .env subiendo desde el directorio actual, y arma la
-    /// cadena de conexion con sus valores.
-    ///
-    /// Sube por los directorios padre porque los comandos de EF se pueden
-    /// ejecutar desde la raiz del repositorio o desde dentro de un proyecto.
+    /// La cadena de la variable de entorno, o la que se arma con el .env que
+    /// se encuentre subiendo desde <paramref name="desde"/>. Publica para
+    /// poder probarla sin depender del entorno de quien corre las pruebas.
     /// </summary>
-    private static string? LeerDelArchivoEnv()
+    public static string ResolverCadena(string? deEntorno, DirectoryInfo desde)
     {
-        var directorio = new DirectoryInfo(Directory.GetCurrentDirectory());
-
-        while (directorio is not null)
+        if (!string.IsNullOrWhiteSpace(deEntorno))
         {
-            var ruta = Path.Combine(directorio.FullName, ".env");
+            return deEntorno;
+        }
 
-            if (File.Exists(ruta))
+        var archivo = BuscarEnv(desde)
+            ?? throw new InvalidOperationException(
+                "Las herramientas de EF no encuentran la cadena de conexion. Definala " +
+                "de una de estas dos formas:" + Environment.NewLine +
+                $"  1. La variable de entorno {Variable}. En bash: " +
+                $"export {Variable}=\"Host=localhost;Port=5432;Database=...;Username=...;Password=...\". " +
+                $"En PowerShell: $env:{Variable} = \"Host=localhost;Port=5432;Database=...;Username=...;Password=...\"." +
+                Environment.NewLine +
+                "  2. Un archivo .env en la raiz del repositorio con POSTGRES_DB, " +
+                "POSTGRES_USER y POSTGRES_PASSWORD. Copie .env.example y cambie los valores." +
+                Environment.NewLine +
+                "La contrasena nunca se escribe en el codigo (RNF-01).");
+
+        var valores = LeerValores(archivo);
+        var faltan = ClavesEnv.Where(clave => !valores.ContainsKey(clave)).ToList();
+
+        if (faltan.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"El archivo {archivo.FullName} no define {string.Join(", ", faltan)}. " +
+                "Agreguelos (ver .env.example), o defina la variable de entorno " +
+                $"{Variable} con la cadena completa.");
+        }
+
+        return $"Host=localhost;Port=5432;Database={valores["POSTGRES_DB"]};" +
+               $"Username={valores["POSTGRES_USER"]};Password={valores["POSTGRES_PASSWORD"]}";
+    }
+
+    /// <summary>
+    /// Busca un archivo .env subiendo por los directorios padre, porque los
+    /// comandos de EF se pueden ejecutar desde la raiz del repositorio o desde
+    /// dentro de un proyecto.
+    /// </summary>
+    private static FileInfo? BuscarEnv(DirectoryInfo desde)
+    {
+        for (var directorio = desde; directorio is not null; directorio = directorio.Parent)
+        {
+            var archivo = new FileInfo(Path.Combine(directorio.FullName, ".env"));
+
+            if (archivo.Exists)
             {
-                var valores = File.ReadAllLines(ruta)
-                    .Select(linea => linea.Trim())
-                    .Where(linea =>
-                        linea.Length > 0 &&
-                        !linea.StartsWith('#') &&
-                        linea.Contains('='))
-                    .Select(linea => linea.Split('=', 2))
-                    .ToDictionary(
-                        partes => partes[0].Trim(),
-                        partes => partes[1].Trim());
-
-                if (valores.TryGetValue("POSTGRES_DB", out var baseDatos) &&
-                    valores.TryGetValue("POSTGRES_USER", out var usuario) &&
-                    valores.TryGetValue("POSTGRES_PASSWORD", out var clave))
-                {
-                    return $"Host=localhost;Port=5432;Database={baseDatos};" +
-                           $"Username={usuario};Password={clave}";
-                }
+                return archivo;
             }
-
-            directorio = directorio.Parent;
         }
 
         return null;
     }
+
+    private static Dictionary<string, string> LeerValores(FileInfo archivo) =>
+        File.ReadAllLines(archivo.FullName)
+            .Select(linea => linea.Trim())
+            .Where(linea => linea.Length > 0 && !linea.StartsWith('#') && linea.Contains('='))
+            .Select(linea => linea.Split('=', 2))
+            .Where(partes => partes[1].Trim().Length > 0)
+            .ToDictionary(partes => partes[0].Trim(), partes => partes[1].Trim());
 }

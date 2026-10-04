@@ -44,14 +44,23 @@ public sealed class ProveedorValidacionHttp(
                 respuesta.StatusCode == HttpStatusCode.OK)
             {
                 var aceptada = JsonSerializer.Deserialize<CuerpoTransmision>(cuerpo, Json);
+                var seguimiento = aceptada?.IdentificadorSeguimiento;
 
-                return string.IsNullOrWhiteSpace(aceptada?.IdentificadorSeguimiento)
+                // ADR-0015. Un 2xx dice que el documento llego. Sin un
+                // identificador que se pueda guardar y consultar, no hay forma
+                // de saber que paso despues: eso es "no se sabe", no "no
+                // llego". ADR-0014 lo trataba como ErrorTransitorio, y al
+                // agotarse los intentos el historial afirmaba que el documento
+                // no habia llegado.
+                return string.IsNullOrWhiteSpace(seguimiento) ||
+                       seguimiento.Length > Transmision.LongitudMaximaSeguimiento
                     ? new ResultadoEnvio(
-                        ResultadoTransmision.ErrorTransitorio,
-                        RespuestaCruda: "Aceptada sin identificador de seguimiento.")
+                        ResultadoTransmision.SinRespuesta,
+                        RespuestaCruda: "Aceptada sin identificador de seguimiento utilizable: " +
+                                        cuerpo)
                     : new ResultadoEnvio(
                         ResultadoTransmision.Aceptada,
-                        aceptada.IdentificadorSeguimiento,
+                        seguimiento,
                         cuerpo);
             }
 
@@ -113,7 +122,7 @@ public sealed class ProveedorValidacionHttp(
                 "APROBADO" => new ResultadoConsulta(VeredictoAutoridad.Aprobado, [], cuerpo),
                 "RECHAZADO" => new ResultadoConsulta(
                     VeredictoAutoridad.Rechazado,
-                    veredicto.Errores ?? ["La autoridad rechazo el documento sin detallar."],
+                    ErroresDeRechazo(veredicto.Errores),
                     cuerpo),
                 "EN_PROCESO" => new ResultadoConsulta(VeredictoAutoridad.EnProceso, [], cuerpo),
                 _ => ResultadoConsulta.NoDisponible(cuerpo)
@@ -152,6 +161,26 @@ public sealed class ProveedorValidacionHttp(
 
         _ => ResultadoTransmision.ErrorTransitorio
     };
+
+    /// <summary>
+    /// Los errores de un rechazo, nunca vacios.
+    ///
+    /// El dominio no acepta un rechazo sin errores (RF-21), y con razon. Pero
+    /// si la autoridad omite el campo, lo manda vacio o lo manda con textos
+    /// en blanco, el rechazo sigue siendo un rechazo: se registra como tal y
+    /// se dice que no vino detalle, en vez de lanzar y dejar el documento sin
+    /// veredicto.
+    /// </summary>
+    private static IReadOnlyList<string> ErroresDeRechazo(string[]? errores)
+    {
+        var conTexto = (errores ?? [])
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .ToList();
+
+        return conTexto.Count > 0
+            ? conTexto
+            : ["La autoridad rechazo el documento sin detallar."];
+    }
 
     private sealed record CuerpoTransmision(string? IdentificadorSeguimiento);
     private sealed record CuerpoVeredicto(string? Veredicto, string[]? Errores);

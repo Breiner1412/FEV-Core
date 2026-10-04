@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FevCore.Api.Configuracion;
 using YamlDotNet.RepresentationModel;
 
 namespace FevCore.Integration.Tests;
@@ -37,14 +38,18 @@ public sealed class ContratoGeneradoTests(FabricaApiConBaseDeDatos fabrica)
     /// necesita un motivo por el que esa ruta NO forma parte de lo que se le
     /// promete a un integrador.
     /// </summary>
-    private static bool FueraDelContrato(string ruta) =>
+    private static bool FueraDelContrato(string ruta, JsonElement operacion) =>
         // Vive fuera de /api/v1 y por eso no se puede expresar en un
         // documento cuyo servidor ya incluye ese prefijo. Es de operacion,
         // no del contrato de emision.
         ruta == "/health"
         // No existe en produccion: solo se registra bajo Development y
-        // Testing. Documentarlo invitaria a construir contra el.
-        || ruta.StartsWith($"{Base}/desarrollo", StringComparison.Ordinal);
+        // Testing. Documentarlo invitaria a construir contra el. Se reconoce
+        // por la etiqueta y no por la ruta, porque POST /documentos/{id}/xml
+        // es de desarrollo y GET de la misma ruta es del contrato (RF-25).
+        || (operacion.TryGetProperty("tags", out var etiquetas)
+            && etiquetas.EnumerateArray().Any(e =>
+                e.GetString() == EndpointsDesarrollo.Etiqueta));
 
     private static string RaizDelRepositorio()
     {
@@ -112,14 +117,10 @@ public sealed class ContratoGeneradoTests(FabricaApiConBaseDeDatos fabrica)
 
         foreach (var ruta in documento.RootElement.GetProperty("paths").EnumerateObject())
         {
-            if (FueraDelContrato(ruta.Name))
-            {
-                continue;
-            }
-
             foreach (var metodo in ruta.Value.EnumerateObject())
             {
-                if (MetodosHttp.Contains(metodo.Name))
+                if (MetodosHttp.Contains(metodo.Name)
+                    && !FueraDelContrato(ruta.Name, metodo.Value))
                 {
                     operaciones.Add($"{metodo.Name.ToUpperInvariant()} {ruta.Name}");
                 }

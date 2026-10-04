@@ -4,6 +4,7 @@ using FevCore.Api.Salida;
 using FevCore.Application.Abstracciones;
 using FevCore.Application.Salida;
 using FevCore.Domain.Integradores;
+using FevCore.Domain.Salida;
 using FevCore.Infrastructure.Persistencia;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -199,6 +200,43 @@ public sealed class FabricaApiConBaseDeDatos : WebApplicationFactory<Program>, I
         }
 
         return procesadas;
+    }
+
+    /// <summary>
+    /// Procesa como el trabajador de verdad: si una vuelta lanza, se sigue
+    /// con la siguiente en vez de propagar.
+    ///
+    /// Sirve para las pruebas que afirman que una tarea TERMINA aunque
+    /// falle, no que no lance. ProcesarTodoAsync se detendria en la primera
+    /// excepcion y la prueba no llegaria a ver si el fallo se repite.
+    /// </summary>
+    public async Task ProcesarComoElTrabajadorAsync(int vueltas)
+    {
+        for (var vuelta = 0; vuelta < vueltas; vuelta++)
+        {
+            try
+            {
+                if (!await ProcesarUnaTareaAsync())
+                {
+                    return;
+                }
+            }
+            catch
+            {
+                // TrabajadorSalida hace exactamente esto: registrar y seguir.
+            }
+        }
+    }
+
+    /// <summary>La tarea de emision de un documento, leida de la base.</summary>
+    public async Task<TareaSalida> TareaDeEmisionAsync(Guid documentoId)
+    {
+        using var alcance = Services.CreateScope();
+
+        return await alcance.ServiceProvider
+            .GetRequiredService<FevCoreDbContext>()
+            .TareasSalida.AsNoTracking()
+            .SingleAsync(t => t.DocumentoId == documentoId && t.Tipo == TipoTarea.Emitir);
     }
 
     /// <summary>Cliente HTTP con la llave de API ya puesta.</summary>

@@ -221,6 +221,17 @@ internal static class AyudantesPruebas
             lineas = new[] { new { productoId, cantidad } }
         };
 
+    /// <summary>
+    /// El detalle de la ultima transicion del historial. En un FALLIDO es lo
+    /// que dice cual de los desenlaces fue (RN-13, ADR-0015).
+    /// </summary>
+    public static async Task<string> DetalleDeLaUltimaTransicion(HttpClient cliente, Guid id)
+    {
+        var historial = await LeerJson(await cliente.GetAsync($"{RutaDocumentos}/{id}/historial"));
+
+        return historial.EnumerateArray().Last().GetProperty("detalle").GetString()!;
+    }
+
     public static object SolicitudFactura(
         string referencia,
         Guid adquirenteId,

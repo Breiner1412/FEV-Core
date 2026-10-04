@@ -6,13 +6,13 @@ namespace FevCore.Application.Documentos;
 /// <summary>
 /// Caso de uso: llevar un documento a un estado nuevo (RN-11, RN-12).
 ///
-/// El caso de uso existe en todos los entornos; lo que no existe en
-/// produccion es el endpoint que lo expone. En H7 lo llamara el proceso de
-/// transmision en segundo plano, que es su verdadero cliente.
+/// Su unico cliente es el endpoint de desarrollo que fuerza un estado, que
+/// no existe en produccion. El procesador de la bandeja de salida no lo usa:
+/// mueve los documentos con los metodos que ademas registran lo que paso
+/// (RegistrarXmlGenerado, RegistrarTransmision, RegistrarFallo...).
 ///
 /// Toda la validacion vive en Documento.Transicionar. Aqui no hay ni un if
-/// sobre estados: si lo hubiera, el proceso de H7 tendria que acordarse de
-/// repetirlo.
+/// sobre estados.
 /// </summary>
 public sealed class TransicionarDocumentoHandler(
     IRepositorioDocumentos repositorio,

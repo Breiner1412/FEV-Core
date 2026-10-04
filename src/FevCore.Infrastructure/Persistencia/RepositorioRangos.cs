@@ -49,12 +49,21 @@ public sealed class RepositorioRangos(FevCoreDbContext contexto) : IRepositorioR
         return encontrados.FirstOrDefault();
     }
 
-    public Task<RangoNumeracion?> BuscarPorPrefijoYTipoAsync(
+    /// <summary>
+    /// SingleOrDefault y no FirstOrDefault: si INV-RAN-03 se hubiera roto y
+    /// dos rangos reclamaran el mismo numero, elegir uno en silencio daria
+    /// un codigo unico que puede estar mal. Es preferible que falle.
+    /// </summary>
+    public Task<RangoNumeracion?> BuscarQueNumeroAsync(
         string prefijo,
         TipoDocumento tipoDocumento,
+        long consecutivo,
         CancellationToken cancelacion = default) =>
-        contexto.RangosNumeracion.FirstOrDefaultAsync(
-            r => r.Prefijo == prefijo && r.TipoDocumento == tipoDocumento,
+        contexto.RangosNumeracion.SingleOrDefaultAsync(
+            r => r.Prefijo == prefijo
+                 && r.TipoDocumento == tipoDocumento
+                 && r.NumeroInicial <= consecutivo
+                 && r.NumeroFinal >= consecutivo,
             cancelacion);
 
     public Task<RangoNumeracion?> ObtenerPorIdAsync(
