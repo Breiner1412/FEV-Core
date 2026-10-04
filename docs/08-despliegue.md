@@ -156,12 +156,21 @@ De cada grupo hay que decidir cuál es el bueno y desactivar los demás (`DELETE
 
 ## 5. Qué no se guarda nunca (RNF-01)
 
-Ningún secreto vive en el repositorio. Concretamente:
+Ningún secreto **real** vive en el repositorio. Concretamente:
 
 - **El certificado de firma** entra por configuración en base 64. El repositorio no contiene ningún `.p12` ni `.pfx`, y las pruebas generan certificados autofirmados en memoria.
 - **Las llaves de API** se guardan como huella criptográfica, nunca en claro. Una llave se muestra una sola vez, al crearse *(INV-INT-01)*.
 - **La clave técnica** de un rango entra y no vuelve a salir: no aparece en ninguna respuesta de consulta.
 - **`.env`** está en `.gitignore`. `.env.example` lleva los nombres, nunca los valores.
+- **La cadena de conexión** de las herramientas de EF sale de la configuración: no hay un valor de respaldo con la contraseña escrita en el código.
+
+### Credenciales de desarrollo publicadas a propósito
+
+Hay **una**, y no es un secreto: la llave de API del integrador de desarrollo, `fev_desarrollo_no_usar_en_produccion`. Está escrita en `SemillaDesarrollo` y publicada en el README a propósito, para que cualquiera pueda seguir el recorrido sin aprovisionar nada. Se puede cambiar con `LLAVE_DESARROLLO`.
+
+Solo se siembra en el entorno `Development`, por lista blanca de entornos *(igual que los endpoints de desarrollo)*. Una prueba comprueba que en `Production` no autentica, y otra que en `Development` sí.
+
+> **Desplegar con `ASPNETCORE_ENVIRONMENT=Development` sembraría esa llave**, y con ella cualquiera que haya leído el README tendría acceso a la API. También activaría los endpoints de desarrollo, que permiten forzar el estado de un documento y generar o firmar a mano. Un despliegue real nunca usa `Development`. `docker-compose.yml` lo usa porque es el entorno del recorrido, no un despliegue.
 
 ---
 

@@ -64,7 +64,7 @@ Ese repaso encontró tres huecos reales, y están en la sección final.
 
 | ID | Requerimiento | Implementado en | Verificado por |
 |---|---|---|---|
-| `RNF-01` | Los secretos —llaves de API, certificado, credenciales de base de datos— no pueden estar en … | Program · FabricaDbContextDisenio · ProveedorCertificadoConfiguracion | FabricaApiConBaseDeDatos · FirmaXadesTests |
+| `RNF-01` | Ningún secreto real en el repositorio; las credenciales de desarrollo publicadas se nombran como tales y solo existen fuera de producción. … | Program · FabricaDbContextDisenio · ProveedorCertificadoConfiguracion | FabricaApiConBaseDeDatos · FirmaXadesTests |
 | `RNF-02` | El acceso al servicio de validación de la autoridad debe estar detrás de una abstracción que… | IProveedorValidacion | ProveedorValidacionHttpTests · CicloCompletoTests |
 | `RNF-03` | La solicitud de emisión debe responder en menos de 500 ms en el percentil 95, medido sin inc… | — | **sin verificación automática** |
 | `RNF-04` | El procesamiento de documentos debe continuar aunque el servicio de validación esté caído, e… | TrabajadorSalida · IRepositorioTareas · OpcionesSalida · Program · TareaSalida · RepositorioTareas | TareaSalidaTests · BandejaDeSalidaTests · CicloCompletoTests · ProveedorValidacionSimulado |
