@@ -14,7 +14,7 @@ Este documento existe porque un plan que se cumple a la perfección no se lo cre
 | Del primer commit al último | 24 al 30 de septiembre de 2026 |
 | Código de producción | 15.800 líneas en 106 archivos *(al cierre de H8)* |
 | Código de pruebas | 7.100 líneas en 38 archivos *(al cierre de H8)* |
-| Pruebas automatizadas | 361 al cierre de H8; 400 tras la auditoría final, todas en verde |
+| Pruebas automatizadas | 361 al cierre de H8; 402 tras la auditoría final, todas en verde |
 | Decisiones registradas (ADR) | 17 (14 en H8; la auditoría añadió ADR-0015, que sustituye a ADR-0014, ADR-0016 y ADR-0017) |
 | Migraciones de base de datos | 9 (la novena, de la auditoría final) |
 | Requerimientos | 50: 3 sin verificación automática y 2 implementados solo en parte (RF-11, RF-24) |

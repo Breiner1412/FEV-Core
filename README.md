@@ -4,7 +4,7 @@ API de emisión de documentos electrónicos para Colombia, construida sobre .NET
 
 Recibe los datos de una operación comercial y produce un documento electrónico generado, firmado y transmitido para validación, con su estado rastreable en todo momento. Está pensada para integrarse a un sistema que ya existe — un ERP, un e-commerce, un punto de venta — sin imponerle interfaz ni modelo de datos.
 
-> **Estado: completo.** Los 9 hitos entregados y una auditoría final, 400 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
+> **Estado: completo.** Los 9 hitos entregados y una auditoría final, 402 pruebas en verde. Ver la [hoja de ruta](#hoja-de-ruta).
 >
 > Si vas a mirar una sola cosa, que sea la [retrospectiva](docs/10-retrospectiva.md): qué se subestimó, qué salió mejor de lo esperado y qué haría diferente.
 
