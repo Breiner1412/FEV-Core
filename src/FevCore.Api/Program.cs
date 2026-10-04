@@ -195,7 +195,9 @@ if (!app.Environment.IsEnvironment("Testing"))
         await contexto.Database.MigrateAsync();
     }
 
-    if (app.Environment.IsDevelopment())
+    // Lista blanca y no IsDevelopment: la misma regla que los endpoints de
+    // desarrollo, escrita igual. Ver SemillaDesarrollo.
+    if (SemillaDesarrollo.EstaPermitidaEn(app.Environment))
     {
         await SemillaDesarrollo.SembrarIntegradorAsync(app);
     }

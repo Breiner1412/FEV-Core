@@ -100,4 +100,21 @@ public sealed class EndpointsSoloDesarrolloTests(FabricaApiConBaseDeDatos fabric
 
         Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
     }
+
+    // ── La llave publicada de desarrollo (RNF-01) ──
+
+    /// <summary>
+    /// RNF-01. La llave de desarrollo esta publicada en el README a
+    /// proposito, y por eso solo puede existir en Development. Su
+    /// contraparte, que en Development si autentica, vive en
+    /// SemillaDesarrolloTests: con la misma base, el orden de ejecucion
+    /// decidiria si la llave ya estaba sembrada.
+    /// </summary>
+    [Fact]
+    public async Task En_produccion_la_llave_publicada_de_desarrollo_no_autentica()
+    {
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            await SemillaDesarrolloTests.ConsultarConLaLlaveDeDesarrolloEn(fabrica, "Production"));
+    }
 }
