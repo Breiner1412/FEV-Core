@@ -8,11 +8,11 @@ Las decisiones registradas en `docs/adr/` no se cambiaron. Donde una estaba mal,
 
 | | Antes | Después |
 |---|---|---|
-| Pruebas | 361 | **400**, todas en verde |
+| Pruebas | 361 | **402**, todas en verde |
 | ADR | 14 | **17** (ADR-0015 sustituye a ADR-0014; ADR-0016 y ADR-0017 nuevas) |
 | Migraciones | 8 | 9 |
 
-`94 files changed, 3928 insertions(+), 627 deletions(-)`, en 25 commits agrupados por tema.
+`96 files changed, 4018 insertions(+), 630 deletions(-)`, en 28 commits agrupados por tema, sin contar el de este archivo.
 
 ---
 
@@ -82,6 +82,7 @@ No se corrigió en silencio (`d4a03e8`). El documento dice al principio que lo h
 | `248905e` | B3: generar y firmar por HTTP estaban abiertos en producción | `EndpointsSoloDesarrolloTests` |
 | `ed2276d` | RNF-10 no se cumplía | `RegistrosPorDocumentoTests` |
 | `6090f0c` | Contraseña escrita en `FabricaDbContextDisenio` | `FabricaDisenioTests` |
+| `00c3ce7`, `f9ef664` | La llave publicada de desarrollo: siembra por lista blanca; RNF-01 distingue secretos reales de credenciales de desarrollo | `EndpointsSoloDesarrolloTests`, `SemillaDesarrolloTests` |
 | `8ec4aff` | D3: la nota mezclaba la identidad del adquirente de la factura con sus datos actuales (ADR-0017) | `PartesDeLaNotaTests`, `NotasTests` |
 | `1277b62`, `3b185e1`, `9327e1c` | B8: comentarios que contaban otra cosa que el código | `LineaTests` (un caso se arregló en el código) |
 | `3a65ba3` | F1: código sin llamador en producción | — |
@@ -155,7 +156,9 @@ La lista vale tanto como los arreglos.
     - Los totales de impuesto anteriores conservan el redondeo anterior.
 17. **El catálogo admite productos con precio 0**, mientras que una línea exige precio mayor que cero. Un producto así solo se puede facturar negociando el precio; sin hacerlo, la emisión responde 409.
 18. **La lección de A8 no está automatizada.** Ninguna prueba envía literalmente los ejemplos de `openapi.yaml`. La de A8 envía un caso equivalente, no el ejemplo del contrato.
-19. **Pendiente de decisión: la llave de API de desarrollo está escrita en el código** (`SemillaDesarrollo.LlavePorDefecto`, publicada en el README). Es el mismo caso que la contraseña de la fábrica de diseño (RNF-01 nombra las llaves de API). No se tocó porque arrastra el recorrido del README y el `docker compose`.
+19. **La llave de API de desarrollo sigue escrita en el código, por decisión explícita** (`SemillaDesarrollo`, publicada en el README). No es el mismo caso que la contraseña de la fábrica de diseño, que era un valor de respaldo capaz de conectar con una base real y que no hacía falta. Esta existe a propósito, está publicada a propósito para que un desconocido pueda seguir el recorrido, y solo se siembra en `Development`: es un accesorio de pruebas, no un secreto filtrado.
+
+    Lo que se corrigió fue RNF-01, que no distinguía (`f9ef664`): ahora dice "ningún secreto **real**", y que las credenciales de desarrollo publicadas se nombran como tales y solo existen fuera de producción. La siembra pasó de `IsDevelopment()` a una lista blanca explícita, como los endpoints de desarrollo (`00c3ce7`). Dos pruebas, en clases separadas para no depender del orden, comprueban que la llave no autentica en `Production` y sí en `Development`. `08-despliegue.md` deja escrito que desplegar con `ASPNETCORE_ENVIRONMENT=Development` sembraría esa llave y activaría los endpoints de desarrollo.
 
 ---
 
@@ -165,7 +168,7 @@ La lista vale tanto como los arreglos.
 dotnet test
 ```
 
-400 pruebas, con Docker en marcha para Testcontainers.
+402 pruebas, con Docker en marcha para Testcontainers.
 
 Quien aplique la migración sobre una base con datos debe leer antes `docs/08-despliegue.md`, sección 4. Las herramientas de EF ya no tienen contraseña de respaldo: necesitan `ConnectionStrings__Principal` o un `.env`.
 
